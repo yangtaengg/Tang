@@ -10,30 +10,49 @@ object NotificationDeduper {
     @Synchronized
     fun isDuplicate(event: RelaySmsEvent): Boolean {
         val now = System.currentTimeMillis()
+        val key = buildSmsKey(event)
+        return checkDuplicate(key, now)
+    }
+
+    @Synchronized
+    fun isDuplicate(event: RelayCallEvent): Boolean {
+        val now = System.currentTimeMillis()
+        val key = buildCallKey(event)
+        return checkDuplicate(key, now)
+    }
+
+    private fun checkDuplicate(key: String, now: Long): Boolean {
         cleanup(now)
+        val roundedTs = (now / 5_000L) * 5_000L
+        val fullKey = "$key|$roundedTs"
 
-        val roundedTs = (event.timestamp / 5_000L) * 5_000L
-        val key = listOf(
-            event.sourcePackage,
-            event.conversationKey,
-            event.body,
-            if (event.replyKey.isNullOrEmpty()) "no-reply" else "has-reply",
-            roundedTs.toString()
-        ).joinToString("|")
-
-        val previous = recent[key]
+        val previous = recent[fullKey]
         if (previous != null && now - previous <= WINDOW_MS) {
             return true
         }
 
-        recent[key] = now
+        recent[fullKey] = now
         if (recent.size > MAX_ENTRIES) {
-            val first = recent.entries.firstOrNull()?.key
-            if (first != null) {
-                recent.remove(first)
-            }
+            recent.entries.firstOrNull()?.key?.let { recent.remove(it) }
         }
         return false
+    }
+
+    private fun buildSmsKey(event: RelaySmsEvent): String {
+        return listOf(
+            event.sourcePackage,
+            event.conversationKey,
+            event.body,
+            if (event.replyKey.isNullOrEmpty()) "no-reply" else "has-reply"
+        ).joinToString("|")
+    }
+
+    private fun buildCallKey(event: RelayCallEvent): String {
+        return listOf(
+            "call",
+            event.from,
+            event.name ?: "no-name"
+        ).joinToString("|")
     }
 
     private fun cleanup(now: Long) {

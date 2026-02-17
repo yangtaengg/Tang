@@ -4,6 +4,7 @@ struct SmsMessage: Identifiable, Hashable {
     let id: String
     let timestamp: Date
     let from: String
+    let fromPhone: String?
     let body: String
     let sourcePackage: String
     let conversationKey: String

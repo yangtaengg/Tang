@@ -1,7 +1,9 @@
 package com.smsrelay.mvp
 
+import android.Manifest
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +23,26 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Camera permission is required for QR pairing.", Toast.LENGTH_LONG).show()
             }
+        }
+
+    private val requestPhoneStatePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                PhoneStateCallMonitor.start(this)
+                Toast.makeText(this, "Incoming call alerts enabled.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Phone permission denied. Call alerts may be limited.", Toast.LENGTH_LONG).show()
+            }
+        }
+
+    private val requestSendSmsPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                Toast.makeText(this, "SMS sending permission granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "SMS sending denied. Mac-triggered SMS send will be blocked.", Toast.LENGTH_LONG).show()
+            }
+            renderState()
         }
 
     private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -43,13 +65,22 @@ class MainActivity : AppCompatActivity() {
 
         pairingStore = PairingStore(this)
         RelayWebSocketClient.initialize(this)
+        ensurePhoneStatePermission()
 
         binding.openNotificationAccessButton.setOnClickListener {
             startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
 
+        binding.openSamsungNotificationContentButton.setOnClickListener {
+            openSamsungNotificationContentSettings()
+        }
+
+        binding.requestSmsPermissionButton.setOnClickListener {
+            requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
+        }
+
         binding.scanQrButton.setOnClickListener {
-            requestCameraPermission.launch(android.Manifest.permission.CAMERA)
+            requestCameraPermission.launch(Manifest.permission.CAMERA)
         }
 
         binding.clearPairingButton.setOnClickListener {
@@ -67,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderState()
+        PhoneStateCallMonitor.start(this)
         RelayWebSocketClient.connectIfNeeded()
     }
 
@@ -93,6 +125,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Battery optimization exclusion is already enabled for this app."
         }
+
+        val smsGranted = PermissionHelper.hasSendSmsPermission(this)
+        binding.smsPermissionStatusText.text = if (smsGranted) {
+            "SMS Permission: Granted"
+        } else {
+            "SMS Permission: Not granted (reply_sms blocked)"
+        }
     }
 
     private fun launchQrScanner() {
@@ -102,5 +141,38 @@ class MainActivity : AppCompatActivity() {
         options.setBeepEnabled(false)
         options.setOrientationLocked(true)
         scanLauncher.launch(options)
+    }
+
+    private fun openSamsungNotificationContentSettings() {
+        if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            Toast.makeText(this, "Samsung device only", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val intents = listOf(
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, "com.samsung.android.messaging"),
+            Intent("android.settings.NOTIFICATION_SETTINGS"),
+            Intent("android.settings.LOCK_SCREEN_SETTINGS")
+        )
+
+        val launched = intents.firstOrNull { intent ->
+            intent.resolveActivity(packageManager) != null
+        }?.let {
+            startActivity(it)
+            true
+        } ?: false
+
+        if (!launched) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
+    private fun ensurePhoneStatePermission() {
+        if (PermissionHelper.hasPhoneStatePermission(this)) {
+            PhoneStateCallMonitor.start(this)
+            return
+        }
+        requestPhoneStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
     }
 }

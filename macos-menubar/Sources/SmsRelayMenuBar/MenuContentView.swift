@@ -1,10 +1,9 @@
 import SwiftUI
-import AppKit
 
 struct MenuContentView: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var messageStore: MessageStore
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismiss) private var dismiss
     @State private var hoveredMessageID: String?
 
     init(appState: AppState) {
@@ -46,7 +45,7 @@ struct MenuContentView: View {
                             HStack(spacing: 8) {
                                 Button {
                                     appState.openMessageDetail(message)
-                                    appState.presentMessageDetailWindow()
+                                    dismiss()
                                 } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("\(message.timestamp.formatted(date: .omitted, time: .shortened))  \(message.from)")
@@ -83,20 +82,6 @@ struct MenuContentView: View {
                     }
                 }
                 .frame(maxHeight: 300)
-            }
-
-            Divider()
-
-            HStack {
-                Button("Pair device") {
-                    appState.refreshPairingQR()
-                    openWindow(id: "pair-device")
-                    NSApp.activate(ignoringOtherApps: true)
-                }
-                Spacer()
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
             }
         }
         .padding(12)

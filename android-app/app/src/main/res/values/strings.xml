@@ -2,9 +2,11 @@
 <resources>
     <string name="app_name">Tang!</string>
     <string name="notification_service_label">SMS Relay Notification Listener</string>
-    <string name="policy_summary">Reads notification content only from Samsung Messages and Google Messages. No SMS/Call sensitive permissions used.</string>
+    <string name="policy_summary">Reads notification content from Samsung/Google Messages, relays incoming call alerts, and can send SMS to paired recipients when SEND_SMS is granted.</string>
     <string name="open_notification_access">Open Notification Access Settings</string>
+    <string name="open_samsung_notification_content_settings">Open Samsung Notification Content Settings</string>
     <string name="scan_qr">Pair via QR Scan</string>
     <string name="clear_pairing">Clear Pairing</string>
     <string name="open_battery_settings">Battery Optimization Guidance</string>
+    <string name="request_sms_permission">Grant SMS Send Permission</string>
 </resources>

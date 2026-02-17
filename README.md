@@ -20,6 +20,21 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 - Download the latest APK from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
 - Install on your Android device and allow Notification Access when prompted.
 
+## Automated Build and Release
+
+- On every push to `main`, GitHub Actions builds both apps and publishes an auto prerelease.
+- Workflow file: `.github/workflows/build-release.yml`
+- Auto release tag format: `auto-<commit-sha>`
+- Uploaded assets:
+  - `app-debug.apk`
+  - `Tang-macOS.dmg`
+
+Notes:
+
+- The current DMG is unsigned/not notarized (suitable for testing and internal distribution).
+- The current APK is a debug build.
+- For production distribution, switch Android job to signed release APK/AAB and add Apple code-sign + notarization steps for macOS.
+
 ## Quick Start
 
 1. Install and run `Tang!` on macOS.

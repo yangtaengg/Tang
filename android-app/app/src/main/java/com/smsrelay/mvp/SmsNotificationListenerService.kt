@@ -7,11 +7,14 @@ class SmsNotificationListenerService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         RelayWebSocketClient.initialize(this)
+        PhoneStateCallMonitor.start(this)
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         RelayWebSocketClient.initialize(this)
+        PhoneStateCallMonitor.start(this)
+        QuickReplyStore.refreshFromActiveNotifications(activeNotifications ?: emptyArray())
         RelayWebSocketClient.connectIfNeeded()
     }
 
@@ -19,6 +22,7 @@ class SmsNotificationListenerService : NotificationListenerService() {
         QuickReplyStore.updateFromNotification(sbn)
         val active = activeNotifications ?: emptyArray()
         QuickReplyStore.refreshFromActiveNotifications(active)
+
         val fallbackReplyKey = QuickReplyStore.fallbackReplyKeyFor(sbn, active)
         val event = SmsNotificationParser.parse(sbn, fallbackReplyKey) ?: return
         if (NotificationDeduper.isDuplicate(event)) {
@@ -29,5 +33,11 @@ class SmsNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         QuickReplyStore.remove(sbn.key)
+        QuickReplyStore.refreshFromActiveNotifications(activeNotifications ?: emptyArray())
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        PhoneStateCallMonitor.stop()
     }
 }

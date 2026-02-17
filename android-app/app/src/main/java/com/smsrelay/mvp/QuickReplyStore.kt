@@ -12,8 +12,7 @@ import android.service.notification.StatusBarNotification
 object QuickReplyStore {
     private data class ReplyTarget(
         val pendingIntent: PendingIntent,
-        val remoteInput: RemoteInput?,
-        val supportsFreeFormInput: Boolean,
+        val remoteInputs: Array<RemoteInput>,
         val sourcePackage: String,
         val conversationKey: String,
         val updatedAtMs: Long,
@@ -102,16 +101,17 @@ object QuickReplyStore {
         message: String
     ): Result<Unit> {
         prune(System.currentTimeMillis())
+        val normalizedConversationKey = normalizeConversationKey(conversationKey)
+        if (normalizedConversationKey.isEmpty()) {
+            return Result.failure(IllegalStateException("conversation key missing"))
+        }
         val target = targets.values
             .filter { it.sourcePackage == sourcePackage }
             .filter {
-                conversationKey.isNotBlank() &&
-                    it.conversationKey.equals(conversationKey, ignoreCase = true)
+                normalizedConversationKey.isNotEmpty() &&
+                    conversationKeysMatch(it.conversationKey, normalizedConversationKey)
             }
             .maxByOrNull { it.updatedAtMs }
-            ?: targets.values
-                .filter { it.sourcePackage == sourcePackage }
-                .maxByOrNull { it.updatedAtMs }
             ?: return Result.failure(IllegalStateException("reply target not found"))
         return sendWithTarget(context, target, message)
     }
@@ -119,14 +119,16 @@ object QuickReplyStore {
     private fun sendWithTarget(context: Context, target: ReplyTarget, message: String): Result<Unit> {
         return runCatching {
             val fillInIntent = Intent().addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-            val remoteInput = target.remoteInput
-            if (remoteInput != null) {
+            if (target.remoteInputs.isNotEmpty()) {
                 val results = Bundle().apply {
-                    putCharSequence(remoteInput.resultKey, message)
+                    target.remoteInputs.forEach { input ->
+                        putCharSequence(input.resultKey, message)
+                    }
                 }
-                RemoteInput.addResultsToIntent(arrayOf(remoteInput), fillInIntent, results)
+                RemoteInput.addResultsToIntent(target.remoteInputs, fillInIntent, results)
             } else {
                 fillInIntent.putExtra("android.intent.extra.TEXT", message)
+                fillInIntent.putExtra(Intent.EXTRA_TEXT, message)
                 fillInIntent.putExtra("quick_reply", message)
                 fillInIntent.putExtra("reply_text", message)
             }
@@ -142,6 +144,18 @@ object QuickReplyStore {
                 iterator.remove()
             }
         }
+    }
+
+    private fun normalizeConversationKey(value: String): String {
+        return value.trim().lowercase()
+    }
+
+    private fun conversationKeysMatch(stored: String, incomingNormalized: String): Boolean {
+        val storedNormalized = normalizeConversationKey(stored)
+        if (storedNormalized.isEmpty()) {
+            return false
+        }
+        return storedNormalized == incomingNormalized
     }
 
     private fun extractReplyTarget(sbn: StatusBarNotification): ReplyTarget? {
@@ -170,11 +184,16 @@ object QuickReplyStore {
         for (action in ordered) {
             val pendingIntent = action.actionIntent ?: continue
             val remoteInputs = action.remoteInputs ?: continue
-            val selectedInput = remoteInputs.firstOrNull { it.allowFreeFormInput } ?: remoteInputs.firstOrNull() ?: continue
+            val usableInputs = remoteInputs
+                .filter { it.allowFreeFormInput || !it.choices.isNullOrEmpty() }
+                .ifEmpty { remoteInputs.toList() }
+                .toTypedArray()
+            if (usableInputs.isEmpty()) {
+                continue
+            }
             return ReplyTarget(
                 pendingIntent = pendingIntent,
-                remoteInput = selectedInput,
-                supportsFreeFormInput = selectedInput.allowFreeFormInput,
+                remoteInputs = usableInputs,
                 sourcePackage = sourcePackage,
                 conversationKey = conversationKey,
                 updatedAtMs = 0L,
@@ -191,8 +210,7 @@ object QuickReplyStore {
             }
             return ReplyTarget(
                 pendingIntent = pendingIntent,
-                remoteInput = null,
-                supportsFreeFormInput = false,
+                remoteInputs = emptyArray(),
                 sourcePackage = sourcePackage,
                 conversationKey = conversationKey,
                 updatedAtMs = 0L,

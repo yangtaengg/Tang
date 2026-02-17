@@ -38,6 +38,27 @@
             android:layout_marginTop="8dp"
             android:text="@string/open_notification_access" />
 
+        <Button
+            android:id="@+id/openSamsungNotificationContentButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/open_samsung_notification_content_settings" />
+
+        <TextView
+            android:id="@+id/smsPermissionStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/requestSmsPermissionButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/request_sms_permission" />
+
         <TextView
             android:id="@+id/pairingStatusText"
             android:layout_width="match_parent"

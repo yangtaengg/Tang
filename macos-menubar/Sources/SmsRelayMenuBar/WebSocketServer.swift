@@ -9,6 +9,8 @@ final class WebSocketServer {
 
     var onSmsMessage: ((SmsMessage) -> Void)?
     var onIncomingCall: ((IncomingCallEvent) -> Void)?
+    var onReplyResult: ((String?, Bool, String?) -> Void)?
+    var onReplySmsResult: ((String?, Bool, String?) -> Void)?
     var onServerStateChanged: ((String) -> Void)?
     var onClientAuthenticated: ((String, String) -> Void)?
     var onAuthenticatedClientCountChanged: ((Int) -> Void)?
@@ -62,6 +64,58 @@ final class WebSocketServer {
             self.clients.removeAll()
             self.authenticatedClients.removeAll()
             self.notifyAuthenticatedClientCountChanged()
+        }
+    }
+
+    func sendSmsReply(
+        replyKey: String?,
+        sourcePackage: String,
+        conversationKey: String,
+        body: String
+    ) -> Bool {
+        queue.sync {
+            guard let clientId = authenticatedClients.first,
+                  let connection = clients[clientId] else {
+                return false
+            }
+            var payload: [String: Any] = [
+                "type": "sms.reply",
+                "sourcePackage": sourcePackage,
+                "conversationKey": conversationKey,
+                "body": body
+            ]
+            if let replyKey, !replyKey.isEmpty {
+                payload["replyKey"] = replyKey
+            }
+            send(payload, to: connection)
+            return true
+        }
+    }
+
+    func sendReplySms(
+        to: String,
+        body: String,
+        sourcePackage: String,
+        conversationKey: String,
+        clientMsgId: String,
+        timestampMs: Int64
+    ) -> Bool {
+        queue.sync {
+            guard let clientId = authenticatedClients.first,
+                  let connection = clients[clientId] else {
+                return false
+            }
+            let payload: [String: Any] = [
+                "type": "reply_sms",
+                "to": to,
+                "body": body,
+                "sourcePackage": sourcePackage,
+                "conversation_id": conversationKey,
+                "client_msg_id": clientMsgId,
+                "timestamp": timestampMs
+            ]
+            send(payload, to: connection)
+            return true
         }
     }
 
@@ -145,6 +199,7 @@ final class WebSocketServer {
             }
             let conversationKey = (object["conversationKey"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             let resolvedConversationKey = (conversationKey?.isEmpty == false) ? (conversationKey ?? from) : from
+            let fromPhone = (object["fromPhone"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             let replyKey = object["replyKey"] as? String
             if isDuplicate(messageId: id) {
                 return
@@ -153,6 +208,7 @@ final class WebSocketServer {
                 id: id,
                 timestamp: Date(timeIntervalSince1970: timestamp / 1000),
                 from: from,
+                fromPhone: (fromPhone?.isEmpty == false) ? fromPhone : nil,
                 body: body,
                 sourcePackage: sourcePackage,
                 conversationKey: resolvedConversationKey,
@@ -175,6 +231,16 @@ final class WebSocketServer {
             onIncomingCall?(callEvent)
         case "ping":
             send(["type": "pong"], to: connection)
+        case "sms.reply.result":
+            let replyKey = object["replyKey"] as? String
+            let success = object["success"] as? Bool ?? false
+            let reason = object["reason"] as? String
+            onReplyResult?(replyKey, success, reason)
+        case "reply_sms.result":
+            let clientMsgId = object["client_msg_id"] as? String
+            let success = object["success"] as? Bool ?? false
+            let reason = object["reason"] as? String
+            onReplySmsResult?(clientMsgId, success, reason)
         default:
             return
         }

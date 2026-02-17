@@ -1,0 +1,103 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tang-android-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build macOS binary
+        working-directory: macos-menubar
+        run: swift build -c release --product SmsRelayMenuBar
+
+      - name: Create app bundle
+        run: |
+          APP_NAME="Tang!.app"
+          mkdir -p "$APP_NAME/Contents/MacOS"
+          mkdir -p "$APP_NAME/Contents/Resources"
+          cp macos-menubar/.build/release/SmsRelayMenuBar "$APP_NAME/Contents/MacOS/Tang"
+          chmod +x "$APP_NAME/Contents/MacOS/Tang"
+
+          cat > "$APP_NAME/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>Tang!</string>
+            <key>CFBundleDisplayName</key><string>Tang!</string>
+            <key>CFBundleIdentifier</key><string>com.yangtaengg.tang</string>
+            <key>CFBundleExecutable</key><string>Tang</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>0.1.0</string>
+            <key>CFBundleVersion</key><string>${{ github.run_number }}</string>
+            <key>LSUIElement</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Tang" -srcfolder "Tang!.app" -ov -format UDZO "Tang-macOS.dmg"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tang-macos-dmg
+          path: Tang-macOS.dmg
+
+  release:
+    needs:
+      - android
+      - macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: auto-${{ github.sha }}
+          name: Auto build ${{ github.sha }}
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            dist/tang-android-apk/app-debug.apk
+            dist/tang-macos-dmg/Tang-macOS.dmg

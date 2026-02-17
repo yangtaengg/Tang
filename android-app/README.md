@@ -10,6 +10,7 @@ Used:
 - `INTERNET`
 - `ACCESS_NETWORK_STATE`
 - `CAMERA` (QR pairing)
+- `SEND_SMS` (for direct `reply_sms` sending)
 
 Not used:
 
@@ -72,6 +73,18 @@ Server can request quick reply when the source notification supports inline repl
 
 ```json
 {"type":"sms.reply","replyKey":"<notification-key>","body":"On my way"}
+```
+
+Server can request direct SMS send (requires `SEND_SMS` runtime permission):
+
+```json
+{"type":"reply_sms","sourcePackage":"com.google.android.apps.messaging","conversation_id":"Alice","to":"+821012345678","body":"Running late","client_msg_id":"<uuid>","timestamp":1760000000000}
+```
+
+Client returns direct SMS send result:
+
+```json
+{"type":"reply_sms.result","client_msg_id":"<uuid>","success":true}
 ```
 
 ## Reliability

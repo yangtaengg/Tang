@@ -60,8 +60,13 @@ struct PairingView: View {
             }
         }
         .onAppear {
+            let app = NSRunningApplication.current
+            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             NSApp.activate(ignoringOtherApps: true)
             if let window = NSApp.windows.first(where: { $0.title == "Pair device" }) {
+                if window.identifier?.rawValue != "pair-device" {
+                    window.identifier = NSUserInterfaceItemIdentifier("pair-device")
+                }
                 window.makeKeyAndOrderFront(nil)
             }
         }

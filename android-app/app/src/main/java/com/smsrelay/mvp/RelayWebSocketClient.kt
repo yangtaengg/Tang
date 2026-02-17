@@ -30,7 +30,16 @@ object RelayWebSocketClient {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private var reconnectFuture: ScheduledFuture<*>? = null
     private var attempt = 0
-    private val queue = ArrayDeque<RelaySmsEvent>()
+    private val smsQueue = ArrayDeque<RelaySmsEvent>()
+    private val callQueue = ArrayDeque<RelayCallEvent>()
+    private const val REPLY_SMS_RESULT_TTL_MS = 10 * 60 * 1000L
+    private val recentReplySmsResults = LinkedHashMap<String, CachedReplySmsResult>(128, 0.75f, true)
+
+    private data class CachedReplySmsResult(
+        val success: Boolean,
+        val reason: String?,
+        val atMs: Long
+    )
 
     private val client = OkHttpClient.Builder()
         .pingInterval(30, TimeUnit.SECONDS)
@@ -70,8 +79,8 @@ object RelayWebSocketClient {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                val payload = runCatching { JSONObject(text) }.getOrNull() ?: return
-                val type = payload.optString("type")
+                val message = runCatching { JSONObject(text) }.getOrNull() ?: return
+                val type = message.optString("type")
                 when (type) {
                     "auth.ok" -> {
                         authenticated = true
@@ -84,7 +93,10 @@ object RelayWebSocketClient {
                         closeAndReset()
                     }
                     "sms.reply" -> {
-                        handleReplyCommand(payload)
+                        handleReplyCommand(message)
+                    }
+                    "reply_sms" -> {
+                        handleReplySmsCommand(message)
                     }
                     "pong" -> Unit
                 }
@@ -115,13 +127,23 @@ object RelayWebSocketClient {
         reconnectFuture?.cancel(false)
         reconnectFuture = null
         closeAndReset()
-        queue.clear()
+        smsQueue.clear()
+        callQueue.clear()
         QuickReplyStore.clear()
     }
 
     @Synchronized
     fun enqueueNotification(event: RelaySmsEvent) {
-        if (queue.size >= 100) {
+        enqueueWithLimit(smsQueue, event, 100)
+    }
+
+    @Synchronized
+    fun enqueueIncomingCall(event: RelayCallEvent) {
+        enqueueWithLimit(callQueue, event, 30)
+    }
+
+    private fun <T> enqueueWithLimit(queue: ArrayDeque<T>, event: T, maxSize: Int) {
+        if (queue.size >= maxSize) {
             queue.removeFirst()
         }
         queue.addLast(event)
@@ -137,19 +159,48 @@ object RelayWebSocketClient {
         if (!authenticated) {
             return
         }
-        while (queue.isNotEmpty()) {
-            val event = queue.removeFirst()
-            val payload = JSONObject()
-                .put("type", "sms.notification")
-                .put("id", event.id)
-                .put("timestamp", event.timestamp)
-                .put("from", event.from)
-                .put("body", event.body)
-                .put("sourcePackage", event.sourcePackage)
-                .put("conversationKey", event.conversationKey)
-            event.replyKey?.let { payload.put("replyKey", it) }
+        flushSmsQueue(webSocket)
+        flushCallQueue(webSocket)
+    }
+
+    private fun flushSmsQueue(webSocket: WebSocket) {
+        while (smsQueue.isNotEmpty()) {
+            val event = smsQueue.removeFirst()
+            val payload = buildSmsPayload(event)
             webSocket.send(payload.toString())
         }
+    }
+
+    private fun flushCallQueue(webSocket: WebSocket) {
+        while (callQueue.isNotEmpty()) {
+            val event = callQueue.removeFirst()
+            val payload = buildCallPayload(event)
+            webSocket.send(payload.toString())
+        }
+    }
+
+    private fun buildSmsPayload(event: RelaySmsEvent): JSONObject {
+        val payload = JSONObject()
+            .put("type", "sms.notification")
+            .put("id", event.id)
+            .put("timestamp", event.timestamp)
+            .put("from", event.from)
+            .put("body", event.body)
+            .put("sourcePackage", event.sourcePackage)
+            .put("conversationKey", event.conversationKey)
+        event.fromPhone?.let { payload.put("fromPhone", it) }
+        event.replyKey?.let { payload.put("replyKey", it) }
+        return payload
+    }
+
+    private fun buildCallPayload(event: RelayCallEvent): JSONObject {
+        val payload = JSONObject()
+            .put("type", "call.incoming")
+            .put("id", event.id)
+            .put("timestamp", event.timestamp)
+            .put("from", event.from)
+        event.name?.let { payload.put("name", it) }
+        return payload
     }
 
     @Synchronized
@@ -170,7 +221,14 @@ object RelayWebSocketClient {
         }
 
         val result = if (replyKey.isNotBlank()) {
-            QuickReplyStore.sendReply(context, replyKey, body)
+            val direct = QuickReplyStore.sendReply(context, replyKey, body)
+            if (direct.isSuccess) {
+                direct
+            } else if (sourcePackage.isBlank()) {
+                direct
+            } else {
+                QuickReplyStore.sendReplyByConversation(context, sourcePackage, conversationKey, body)
+            }
         } else {
             if (sourcePackage.isBlank()) {
                 Result.failure(IllegalStateException("missing source package"))
@@ -189,6 +247,72 @@ object RelayWebSocketClient {
     }
 
     @Synchronized
+    private fun handleReplySmsCommand(payload: JSONObject) {
+        val to = payload.optString("to")
+        val body = payload.optString("body")
+        val sourcePackage = payload.optString("sourcePackage")
+        val conversationId = payload.optString("conversation_id")
+        val clientMsgId = payload.optString("client_msg_id")
+        Log.i(TAG, "reply_sms received: to='${to.take(32)}' conversation='${conversationId.take(32)}' sourcePackage='$sourcePackage'")
+        if (body.isBlank() || clientMsgId.isBlank()) {
+            sendReplySmsResult(clientMsgId, success = false, reason = "invalid payload")
+            return
+        }
+
+        val context = appContext
+        if (context == null) {
+            sendReplySmsResult(clientMsgId, success = false, reason = "context unavailable")
+            return
+        }
+        if (!PermissionHelper.hasSendSmsPermission(context)) {
+            cacheReplySmsResult(clientMsgId, success = false, reason = "send_sms permission required")
+            sendReplySmsResult(clientMsgId, success = false, reason = "send_sms permission required")
+            return
+        }
+
+        val cached = getCachedReplySmsResult(clientMsgId)
+        if (cached != null) {
+            sendReplySmsResult(clientMsgId, cached.success, cached.reason ?: "duplicate")
+            return
+        }
+
+        val primaryDestination = if (to.isNotBlank()) to else conversationId
+        val sendResult = SmsSendManager.send(
+            context = context,
+            toRaw = primaryDestination,
+            body = body,
+            clientMsgId = clientMsgId
+        ) { success, reason ->
+            cacheReplySmsResult(clientMsgId, success, reason)
+            sendReplySmsResult(clientMsgId, success, reason)
+            if (success) {
+                Log.i(TAG, "SMS send succeeded for client_msg_id=$clientMsgId")
+            } else {
+                Log.w(TAG, "SMS send failed for client_msg_id=$clientMsgId: $reason")
+            }
+        }
+
+        if (sendResult.isFailure) {
+            val reason = sendResult.exceptionOrNull()?.message ?: "sms send failed"
+            if (reason == "recipient unavailable" && sourcePackage.isNotBlank() && conversationId.isNotBlank()) {
+                val quickReplyFallback = QuickReplyStore.sendReplyByConversation(
+                    context = context,
+                    sourcePackage = sourcePackage,
+                    conversationKey = conversationId,
+                    message = body
+                )
+                if (quickReplyFallback.isSuccess) {
+                    cacheReplySmsResult(clientMsgId, success = true, reason = "sent via quick reply")
+                    sendReplySmsResult(clientMsgId, success = true, reason = "sent via quick reply")
+                    return
+                }
+            }
+            cacheReplySmsResult(clientMsgId, success = false, reason = reason)
+            sendReplySmsResult(clientMsgId, success = false, reason = reason)
+        }
+    }
+
+    @Synchronized
     private fun sendReplyResult(replyKey: String, success: Boolean, reason: String?) {
         val webSocket = socket ?: return
         if (!authenticated) {
@@ -200,6 +324,49 @@ object RelayWebSocketClient {
             .put("success", success)
         reason?.let { payload.put("reason", it) }
         webSocket.send(payload.toString())
+    }
+
+    @Synchronized
+    private fun sendReplySmsResult(clientMsgId: String, success: Boolean, reason: String?) {
+        val webSocket = socket ?: return
+        if (!authenticated) {
+            return
+        }
+        val payload = JSONObject()
+            .put("type", "reply_sms.result")
+            .put("client_msg_id", clientMsgId)
+            .put("success", success)
+        reason?.let { payload.put("reason", it) }
+        webSocket.send(payload.toString())
+    }
+
+    @Synchronized
+    private fun cacheReplySmsResult(clientMsgId: String, success: Boolean, reason: String?) {
+        pruneReplySmsResults(System.currentTimeMillis())
+        recentReplySmsResults[clientMsgId] = CachedReplySmsResult(
+            success = success,
+            reason = reason,
+            atMs = System.currentTimeMillis()
+        )
+        if (recentReplySmsResults.size > 512) {
+            recentReplySmsResults.entries.firstOrNull()?.key?.let { recentReplySmsResults.remove(it) }
+        }
+    }
+
+    @Synchronized
+    private fun getCachedReplySmsResult(clientMsgId: String): CachedReplySmsResult? {
+        pruneReplySmsResults(System.currentTimeMillis())
+        return recentReplySmsResults[clientMsgId]
+    }
+
+    private fun pruneReplySmsResults(now: Long) {
+        val iterator = recentReplySmsResults.entries.iterator()
+        while (iterator.hasNext()) {
+            val item = iterator.next()
+            if (now - item.value.atMs > REPLY_SMS_RESULT_TTL_MS) {
+                iterator.remove()
+            }
+        }
     }
 
     @Synchronized

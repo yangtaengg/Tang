@@ -40,9 +40,28 @@ Server -> Client
 {"type":"pong"}
 ```
 
+```json
+{"type":"sms.reply","replyKey":"<notification-key>","body":"On my way"}
+```
+
+```json
+{"type":"reply_sms","sourcePackage":"com.google.android.apps.messaging","conversation_id":"Alice","to":"+821012345678","body":"Running late","client_msg_id":"<uuid>","timestamp":1760000000000}
+```
+
+Client -> Server (reply acknowledgements)
+
+```json
+{"type":"sms.reply.result","replyKey":"<notification-key>","success":true}
+```
+
+```json
+{"type":"reply_sms.result","client_msg_id":"<uuid>","success":false,"reason":"send_sms permission required"}
+```
+
 ## Notes
 
 - Authentication is required before `sms.notification` events are accepted.
 - `id` is a UUID generated on Android for idempotency.
 - Server should ignore duplicate IDs inside a short TTL window.
+- `reply_sms` is idempotent by `client_msg_id`; Android caches recent outcomes and returns the cached result for duplicates.
 - Pairing token is non-expiring by default in this MVP; keep both devices on the same Wi-Fi for automatic reconnect.
