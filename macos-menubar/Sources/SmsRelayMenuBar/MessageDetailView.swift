@@ -106,7 +106,7 @@ struct MessageDetailView: View {
         }
         .padding(16)
         .frame(width: 420, height: 360)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
         .onAppear {
             requestFocus = true
         }

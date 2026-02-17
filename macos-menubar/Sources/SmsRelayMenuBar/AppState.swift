@@ -32,8 +32,8 @@ final class AppState: ObservableObject {
         window.identifier = NSUserInterfaceItemIdentifier("message-detail")
         window.level = .normal
         window.isReleasedWhenClosed = false
-        window.isOpaque = true
-        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.center()
         window.contentView = NSHostingView(rootView: MessageDetailView(appState: self, onClose: { [weak window] in
             window?.orderOut(nil)
