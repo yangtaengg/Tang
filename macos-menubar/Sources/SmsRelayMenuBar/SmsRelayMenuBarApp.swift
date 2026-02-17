@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var aboutWindow: NSWindow?
+    private var popoverGlobalClickMonitor: Any?
+    private var popoverLocalClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Bundle.main.bundleURL.pathExtension == "app" {
@@ -53,16 +55,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func togglePopover(_ button: NSStatusBarButton) {
         if popover.isShown {
-            popover.performClose(nil)
+            closePopover()
             return
         }
 
         popover.contentViewController = NSHostingController(rootView: MenuContentView(appState: appState))
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        installPopoverDismissMonitor()
     }
 
     private func showContextMenu(with event: NSEvent) {
-        popover.performClose(nil)
+        closePopover()
 
         let menu = NSMenu()
 
@@ -85,6 +88,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSMenu.popUpContextMenu(menu, with: event, for: button)
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        removePopoverDismissMonitor()
+    }
+
+    private func installPopoverDismissMonitor() {
+        removePopoverDismissMonitor()
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        popoverGlobalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            Task { @MainActor in
+                self?.dismissPopoverIfNeeded(at: NSEvent.mouseLocation)
+            }
+        }
+        popoverLocalClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            let point: NSPoint
+            if let window = event.window {
+                point = window.convertPoint(toScreen: event.locationInWindow)
+            } else {
+                point = NSEvent.mouseLocation
+            }
+            self?.dismissPopoverIfNeeded(at: point)
+            return event
+        }
+    }
+
+    private func removePopoverDismissMonitor() {
+        if let monitor = popoverGlobalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            popoverGlobalClickMonitor = nil
+        }
+        if let monitor = popoverLocalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            popoverLocalClickMonitor = nil
+        }
+    }
+
+    private func dismissPopoverIfNeeded(at screenPoint: NSPoint) {
+        guard popover.isShown else {
+            removePopoverDismissMonitor()
+            return
+        }
+        guard let popoverWindow = popover.contentViewController?.view.window else {
+            return
+        }
+        if popoverWindow.frame.contains(screenPoint) {
+            return
+        }
+        closePopover()
     }
 
     @objc private func openPairDeviceFromMenu() {
@@ -118,6 +171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "About Tang"
         window.level = .normal
         window.isReleasedWhenClosed = false
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.center()
         window.contentView = NSHostingView(rootView: AboutView())
         aboutWindow = window
@@ -134,20 +189,35 @@ private struct AboutView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tang")
-                .font(.title2)
-                .bold()
+            HStack {
+                Text("Tang!")
+                    .font(.headline)
+                Spacer()
+                Text("About")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Text(versionText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Link("Buy me a coffee", destination: URL(string: "https://buymeacoffee.com/andyyang")!)
-            Link("GitHub", destination: URL(string: "https://github.com/yangtaengg/Tang")!)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Resources")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link("buymeacoffee.com/andyyang", destination: URL(string: "https://buymeacoffee.com/andyyang")!)
+                    .font(.body)
+                Link("github.com/yangtaengg/Tang", destination: URL(string: "https://github.com/yangtaengg/Tang")!)
+                    .font(.body)
+            }
+            .padding(8)
+            .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
 
             Spacer()
         }
         .padding(16)
         .frame(width: 360, height: 220)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
     }
 }

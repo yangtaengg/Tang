@@ -32,6 +32,8 @@ final class AppState: ObservableObject {
         window.identifier = NSUserInterfaceItemIdentifier("message-detail")
         window.level = .normal
         window.isReleasedWhenClosed = false
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
         window.center()
         window.contentView = NSHostingView(rootView: MessageDetailView(appState: self, onClose: { [weak window] in
             window?.orderOut(nil)
@@ -332,6 +334,8 @@ final class AppState: ObservableObject {
         window.identifier = NSUserInterfaceItemIdentifier("pair-device")
         window.level = .normal
         window.isReleasedWhenClosed = false
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.center()
         window.contentView = NSHostingView(rootView: PairingView(appState: self))
         pairDeviceWindow = window
@@ -355,101 +359,29 @@ final class AppState: ObservableObject {
         panel.backgroundColor = .clear
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 200))
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 14
-        container.layer?.borderWidth = 1
-        container.layer?.borderColor = NSColor.separatorColor.cgColor
-        container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-
-        let chipLabel = NSTextField(labelWithString: "New SMS")
-        chipLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        chipLabel.textColor = .secondaryLabelColor
-        chipLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let timestampLabel = NSTextField(labelWithString: message.timestamp.formatted(date: .omitted, time: .shortened))
-        timestampLabel.font = .systemFont(ofSize: 11)
-        timestampLabel.textColor = .secondaryLabelColor
-        timestampLabel.alignment = .right
-        timestampLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let titleLabel = NSTextField(labelWithString: message.from)
-        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let bodyLabel = NSTextField(labelWithString: message.body)
-        bodyLabel.lineBreakMode = .byWordWrapping
-        bodyLabel.maximumNumberOfLines = 5
-        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
-        let bodyClick = NSClickGestureRecognizer(target: self, action: #selector(openFallbackNotificationDetail))
-        bodyLabel.addGestureRecognizer(bodyClick)
-
-        let divider = NSBox()
-        divider.boxType = .separator
-        divider.translatesAutoresizingMaskIntoConstraints = false
-
-        let copyButton = NSButton(title: "복사", target: self, action: #selector(copyFallbackNotificationMessage))
-        copyButton.bezelStyle = .rounded
-        copyButton.translatesAutoresizingMaskIntoConstraints = false
-
-        var copyCodeButton: NSButton?
-        if verificationCode(in: message) != nil {
-            let button = NSButton(title: "인증번호 복사", target: self, action: #selector(copyFallbackNotificationVerificationCode))
-            button.bezelStyle = .rounded
-            button.translatesAutoresizingMaskIntoConstraints = false
-            copyCodeButton = button
-        }
-
-        let closeButton = NSButton(title: "닫기", target: panel, action: #selector(NSWindow.close))
-        closeButton.bezelStyle = .rounded
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(copyButton)
-        if let copyCodeButton {
-            container.addSubview(copyCodeButton)
-        }
-        container.addSubview(chipLabel)
-        container.addSubview(timestampLabel)
-        container.addSubview(titleLabel)
-        container.addSubview(bodyLabel)
-        container.addSubview(divider)
-        container.addSubview(closeButton)
-
-        NSLayoutConstraint.activate([
-            chipLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            chipLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            timestampLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            timestampLabel.firstBaselineAnchor.constraint(equalTo: chipLabel.firstBaselineAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            titleLabel.topAnchor.constraint(equalTo: chipLabel.bottomAnchor, constant: 6),
-            bodyLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            bodyLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            bodyLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            divider.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            divider.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            divider.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: 12),
-            closeButton.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 10),
-            closeButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            closeButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
-            copyButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            copyButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor)
-        ])
-
-        if let copyCodeButton {
-            NSLayoutConstraint.activate([
-                copyCodeButton.leadingAnchor.constraint(equalTo: copyButton.trailingAnchor, constant: 8),
-                copyCodeButton.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor)
-            ])
-        }
-
-        panel.contentView = container
+        panel.contentView = NSHostingView(rootView: FallbackMessageToastView(
+            message: message,
+            hasVerificationCode: verificationCode(in: message) != nil,
+            onOpenDetail: { [weak self] in
+                self?.openFallbackNotificationDetail()
+            },
+            onCopy: { [weak self] in
+                self?.copyFallbackNotificationMessage()
+            },
+            onCopyCode: { [weak self] in
+                self?.copyFallbackNotificationVerificationCode()
+            },
+            onClose: { [weak self] in
+                self?.fallbackNotificationWindow?.close()
+                self?.clearFallbackNotificationReference()
+            }
+        ))
 
         if let screen = preferredNotificationScreen() {
             let visible = screen.visibleFrame
             var frame = panel.frame
             frame.origin = NSPoint(
-                x: visible.maxX - frame.width - 80,
+                x: visible.maxX - frame.width,
                 y: visible.maxY - frame.height
             )
             frame = panel.constrainFrameRect(frame, to: screen)
@@ -475,45 +407,31 @@ final class AppState: ObservableObject {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 140),
-            styleMask: [.titled, .nonactivatingPanel],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.isFloatingPanel = true
         panel.level = .floating
-        panel.title = title
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 140))
-
-        let bodyLabel = NSTextField(labelWithString: body)
-        bodyLabel.lineBreakMode = .byTruncatingTail
-        bodyLabel.maximumNumberOfLines = 3
-        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let closeButton = NSButton(title: "닫기", target: panel, action: #selector(NSWindow.close))
-        closeButton.bezelStyle = .rounded
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(bodyLabel)
-        container.addSubview(closeButton)
-
-        NSLayoutConstraint.activate([
-            bodyLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
-            bodyLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
-            bodyLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
-            closeButton.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: 10),
-            closeButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
-            closeButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
-        ])
-
-        panel.contentView = container
+        panel.contentView = NSHostingView(rootView: FallbackCallToastView(
+            title: title,
+            messageText: body,
+            onClose: { [weak self] in
+                self?.fallbackNotificationWindow?.close()
+                self?.clearFallbackNotificationReference()
+            }
+        ))
 
         if let screen = preferredNotificationScreen() {
             let visible = screen.visibleFrame
             var frame = panel.frame
             frame.origin = NSPoint(
-                x: visible.maxX - frame.width - 80,
+                x: visible.maxX - frame.width,
                 y: visible.maxY - frame.height
             )
             frame = panel.constrainFrameRect(frame, to: screen)
@@ -615,5 +533,98 @@ final class AppState: ObservableObject {
             return screenUnderMouse
         }
         return NSScreen.main ?? NSScreen.screens.first
+    }
+}
+
+private struct FallbackMessageToastView: View {
+    let message: SmsMessage
+    let hasVerificationCode: Bool
+    let onOpenDetail: () -> Void
+    let onCopy: () -> Void
+    let onCopyCode: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Tang!")
+                    .font(.headline)
+                Spacer()
+                Text("New SMS")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Button(action: onOpenDetail) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(message.timestamp.formatted(date: .omitted, time: .shortened))  \(message.from)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(message.body)
+                        .font(.body)
+                        .lineLimit(4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                Button("복사", action: onCopy)
+                if hasVerificationCode {
+                    Button("인증번호 복사", action: onCopyCode)
+                }
+                Spacer()
+                Button("닫기", action: onClose)
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .controlSize(.large)
+            .buttonStyle(.bordered)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 1)
+        .frame(width: 380, height: 162)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct FallbackCallToastView: View {
+    let title: String
+    let messageText: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Tang!")
+                    .font(.headline)
+                Spacer()
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(messageText)
+                .font(.body)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+
+            HStack {
+                Spacer()
+                Button("닫기", action: onClose)
+                    .font(.system(size: 13, weight: .semibold))
+                    .controlSize(.large)
+                    .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 1)
+        .frame(width: 360, height: 108)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
     }
 }

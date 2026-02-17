@@ -9,18 +9,27 @@ struct MessageDetailView: View {
     @State private var requestFocus: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let message = appState.selectedMessage {
-                Text(message.from)
-                    .font(.title3)
-                    .bold()
-
-                Text(message.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Tang!")
+                        .font(.headline)
+                    Spacer()
+                    Text("Message")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 ScrollView {
-                    Text(message.body)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(message.timestamp.formatted(date: .omitted, time: .shortened))  \(message.from)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(message.body)
+                            .font(.body)
+                    }
+                    .padding(8)
+                        .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                 }
@@ -40,7 +49,12 @@ struct MessageDetailView: View {
                             requestFocus = true
                         }
                         .disabled(replyText.isEmpty)
+                        .font(.system(size: 13, weight: .semibold))
+                        .controlSize(.large)
+                        .buttonStyle(.bordered)
                     }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
 
                     if let status = appState.replyStatusText {
                         Text(status)
@@ -56,15 +70,24 @@ struct MessageDetailView: View {
                         requestFocus = true
                     }
                     .keyboardShortcut(.return, modifiers: [.command])
+                    .font(.system(size: 13, weight: .semibold))
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
 
                     Button("Copy") {
                         appState.copy(message)
                     }
+                    .font(.system(size: 13, weight: .semibold))
+                    .controlSize(.large)
+                    .buttonStyle(.bordered)
 
                     if appState.verificationCode(in: message) != nil {
                         Button("인증번호 복사") {
                             appState.copyVerificationCode(from: message)
                         }
+                        .font(.system(size: 13, weight: .semibold))
+                        .controlSize(.large)
+                        .buttonStyle(.bordered)
                     }
 
                     Spacer()
@@ -72,6 +95,9 @@ struct MessageDetailView: View {
                     Button("Close") {
                         onClose()
                     }
+                    .font(.system(size: 13, weight: .semibold))
+                    .controlSize(.large)
+                    .buttonStyle(.bordered)
                 }
             } else {
                 Text("No message selected")
@@ -80,6 +106,7 @@ struct MessageDetailView: View {
         }
         .padding(16)
         .frame(width: 420, height: 360)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             requestFocus = true
         }

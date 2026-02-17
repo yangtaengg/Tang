@@ -11,6 +11,14 @@ struct MenuContentView: View {
         self._messageStore = ObservedObject(wrappedValue: appState.messageStore)
     }
 
+    private var messageListHeight: CGFloat {
+        let visibleCount = min(messageStore.messages.count, 3)
+        let rowHeight: CGFloat = 64
+        let rowSpacing: CGFloat = 8
+        guard visibleCount > 0 else { return 0 }
+        return (CGFloat(visibleCount) * rowHeight) + (CGFloat(max(visibleCount - 1, 0)) * rowSpacing)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -81,7 +89,7 @@ struct MenuContentView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 300)
+                .frame(height: messageListHeight)
             }
         }
         .padding(12)
