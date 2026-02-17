@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Android / Gradle
+android-app/.gradle/
+android-app/.idea/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+
+# SwiftPM / Xcode derived data in package repo
+macos-menubar/.build/
+macos-menubar/.swiftpm/
