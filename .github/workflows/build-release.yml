@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -91,11 +96,18 @@ jobs:
         with:
           path: dist
 
-      - name: Publish prerelease
+      - name: Generate release tag
+        id: tag
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAG="auto-$(date -u +'%Y%m%d-%H%M%S')-${SHORT_SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: auto-${{ github.sha }}
-          name: Auto build ${{ github.sha }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Auto build ${{ steps.tag.outputs.tag }}
           prerelease: true
           generate_release_notes: true
           files: |

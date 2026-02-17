@@ -24,7 +24,7 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 
 - On every push to `main`, GitHub Actions builds both apps and publishes an auto prerelease.
 - Workflow file: `.github/workflows/build-release.yml`
-- Auto release tag format: `auto-<commit-sha>`
+- Auto release tag format: `auto-<UTC timestamp>-<short-sha>`
 - Uploaded assets:
   - `app-debug.apk`
   - `Tang-macOS.dmg`
