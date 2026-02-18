@@ -275,19 +275,19 @@ final class AppState: ObservableObject {
     }
 
     private func notify(_ message: SmsMessage) {
-        guard Bundle.main.bundleURL.pathExtension == "app" else {
-            showFallbackNotification(message: message)
-            return
+        showFallbackNotification(message: message)
+
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            let content = UNMutableNotificationContent()
+            content.title = message.from
+            content.body = message.body
+            let request = UNNotificationRequest(
+                identifier: message.id,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
         }
-        let content = UNMutableNotificationContent()
-        content.title = message.from
-        content.body = message.body
-        let request = UNNotificationRequest(
-            identifier: message.id,
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
     }
 
     private func notifyIncomingCall(_ call: IncomingCallEvent) {
@@ -353,11 +353,11 @@ final class AppState: ObservableObject {
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.level = .statusBar
         panel.hasShadow = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         panel.contentView = NSHostingView(rootView: FallbackMessageToastView(
             message: message,
@@ -372,8 +372,7 @@ final class AppState: ObservableObject {
                 self?.copyFallbackNotificationVerificationCode()
             },
             onClose: { [weak self] in
-                self?.fallbackNotificationWindow?.close()
-                self?.clearFallbackNotificationReference()
+                self?.closeFallbackPanelIfActive(panel)
             }
         ))
 
@@ -388,16 +387,13 @@ final class AppState: ObservableObject {
             panel.setFrame(frame, display: false)
         }
 
-        panel.orderFront(nil)
+        panel.orderFrontRegardless()
         fallbackNotificationWindow = panel
         installFallbackDismissMonitor()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self, weak panel] in
             guard let panel else { return }
-            panel.close()
-            if self?.fallbackNotificationWindow === panel {
-                self?.clearFallbackNotificationReference()
-            }
+            self?.closeFallbackPanelIfActive(panel)
         }
     }
 
@@ -412,18 +408,17 @@ final class AppState: ObservableObject {
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.level = .statusBar
         panel.hasShadow = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         panel.contentView = NSHostingView(rootView: FallbackCallToastView(
             title: title,
             messageText: body,
             onClose: { [weak self] in
-                self?.fallbackNotificationWindow?.close()
-                self?.clearFallbackNotificationReference()
+                self?.closeFallbackPanelIfActive(panel)
             }
         ))
 
@@ -438,16 +433,13 @@ final class AppState: ObservableObject {
             panel.setFrame(frame, display: false)
         }
 
-        panel.orderFront(nil)
+        panel.orderFrontRegardless()
         fallbackNotificationWindow = panel
         installFallbackDismissMonitor()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self, weak panel] in
             guard let panel else { return }
-            panel.close()
-            if self?.fallbackNotificationWindow === panel {
-                self?.clearFallbackNotificationReference()
-            }
+            self?.closeFallbackPanelIfActive(panel)
         }
     }
 
@@ -456,8 +448,7 @@ final class AppState: ObservableObject {
             return
         }
         copy(message)
-        fallbackNotificationWindow?.close()
-        clearFallbackNotificationReference()
+        closeFallbackPanelIfActive(fallbackNotificationWindow as? NSPanel)
     }
 
     @objc private func copyFallbackNotificationVerificationCode() {
@@ -465,16 +456,14 @@ final class AppState: ObservableObject {
             return
         }
         copyVerificationCode(from: message)
-        fallbackNotificationWindow?.close()
-        clearFallbackNotificationReference()
+        closeFallbackPanelIfActive(fallbackNotificationWindow as? NSPanel)
     }
 
     @objc private func openFallbackNotificationDetail() {
         guard let message = fallbackNotificationMessage else {
             return
         }
-        fallbackNotificationWindow?.close()
-        clearFallbackNotificationReference()
+        closeFallbackPanelIfActive(fallbackNotificationWindow as? NSPanel)
         openMessageDetail(message)
     }
 
@@ -525,6 +514,17 @@ final class AppState: ObservableObject {
         }
         panel.close()
         clearFallbackNotificationReference()
+    }
+
+    private func closeFallbackPanelIfActive(_ panel: NSPanel?) {
+        guard let panel,
+              fallbackNotificationWindow === panel else {
+            return
+        }
+        clearFallbackNotificationReference()
+        DispatchQueue.main.async {
+            panel.close()
+        }
     }
 
     private func preferredNotificationScreen() -> NSScreen? {

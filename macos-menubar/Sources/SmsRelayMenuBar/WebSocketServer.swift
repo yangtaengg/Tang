@@ -137,8 +137,10 @@ final class WebSocketServer {
     }
 
     private func dropClient(_ id: UUID) {
-        clients[id]?.cancel()
-        clients[id] = nil
+        guard let connection = clients.removeValue(forKey: id) else {
+            return
+        }
+        connection.cancel()
         let removed = authenticatedClients.remove(id) != nil
         if removed {
             notifyAuthenticatedClientCountChanged()
@@ -183,7 +185,7 @@ final class WebSocketServer {
                 onClientAuthenticated?(device, appVersion)
             } else {
                 send(["type": "auth.fail", "reason": "invalid token"], to: connection)
-                connection.cancel()
+                dropClient(clientId)
             }
             return
         }

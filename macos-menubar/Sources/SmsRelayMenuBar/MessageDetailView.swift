@@ -69,7 +69,7 @@ struct MessageDetailView: View {
                         replyText = ""
                         requestFocus = true
                     }
-                    .keyboardShortcut(.return, modifiers: [.command])
+                    .keyboardShortcut(.defaultAction)
                     .font(.system(size: 13, weight: .semibold))
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
@@ -161,11 +161,13 @@ private struct KeyTextField: NSViewRepresentable {
             return
         }
 
-        if let window = nsView.window, window.makeFirstResponder(nsView) {
-            DispatchQueue.main.async {
-                requestFocus = false
+        DispatchQueue.main.async {
+            guard requestFocus,
+                  let window = nsView.window,
+                  window.makeFirstResponder(nsView) else {
+                return
             }
-            return
+            requestFocus = false
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

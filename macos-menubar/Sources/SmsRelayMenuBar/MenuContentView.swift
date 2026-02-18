@@ -53,7 +53,9 @@ struct MenuContentView: View {
                             HStack(spacing: 8) {
                                 Button {
                                     appState.openMessageDetail(message)
-                                    dismiss()
+                                    DispatchQueue.main.async {
+                                        dismiss()
+                                    }
                                 } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("\(message.timestamp.formatted(date: .omitted, time: .shortened))  \(message.from)")

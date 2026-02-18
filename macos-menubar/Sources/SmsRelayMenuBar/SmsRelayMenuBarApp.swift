@@ -8,14 +8,14 @@ struct SmsRelayMenuBarApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            OnboardingSettingsView(appState: appDelegate.appState)
         }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let appState = AppState()
+    let appState = AppState()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var aboutWindow: NSWindow?
@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popoverLocalClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = false
+
         if Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
@@ -177,6 +179,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = NSHostingView(rootView: AboutView())
         aboutWindow = window
         return window
+    }
+}
+
+private struct OnboardingSettingsView: View {
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Tang!")
+                    .font(.headline)
+                Spacer()
+                Text("Setup")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("1) Install Android app")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Link("github.com/yangtaengg/Tang/releases/latest", destination: URL(string: "https://github.com/yangtaengg/Tang/releases/latest")!)
+                .font(.body)
+
+            Text("2) Scan QR in Android app")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let qrImage = appState.qrImage {
+                HStack {
+                    Spacer()
+                    Image(nsImage: qrImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 220, height: 220)
+                    Spacer()
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            Text("Use Android app: Notification Access ON -> Pair via QR")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(16)
+        .frame(width: 360, height: 420)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
     }
 }
 

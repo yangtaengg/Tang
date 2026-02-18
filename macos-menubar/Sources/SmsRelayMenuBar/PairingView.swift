@@ -3,7 +3,6 @@ import AppKit
 
 struct PairingView: View {
     @ObservedObject var appState: AppState
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -74,21 +73,5 @@ struct PairingView: View {
         .padding(16)
         .frame(width: 360)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
-        .onChange(of: appState.pairedDeviceName) { newValue in
-            if newValue != nil {
-                dismiss()
-            }
-        }
-        .onAppear {
-            let app = NSRunningApplication.current
-            app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: { $0.title == "Pair device" }) {
-                if window.identifier?.rawValue != "pair-device" {
-                    window.identifier = NSUserInterfaceItemIdentifier("pair-device")
-                }
-                window.makeKeyAndOrderFront(nil)
-            }
-        }
     }
 }
