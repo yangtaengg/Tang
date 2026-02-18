@@ -10,10 +10,13 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 
 ## Platform Downloads
 
-### macOS app (DMG)
+### macOS app (ZIP)
 
-- Download the latest DMG from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
-- Open the `.dmg`, drag `Tang!.app` to Applications, then run.
+- Download the latest ZIP from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
+- Unzip and move `Tang!.app` to Applications.
+- First run in Terminal:
+  - `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
+  - `open "/Applications/Tang!.app"`
 
 ### Android app (APK)
 
@@ -27,27 +30,12 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 - Auto release tag format: `auto-<UTC timestamp>-<short-sha>`
 - Uploaded assets:
   - `app-debug.apk`
-  - `Tang-macOS.dmg`
-  - `Tang-macOS.zip` (fallback if DMG mount fails)
+  - `Tang-macOS.zip`
 
 Notes:
 
-- If signing/notarization secrets are not configured, DMG is unsigned and suitable only for internal/testing.
+- The macOS ZIP is unsigned (free distribution mode) and may require quarantine removal.
 - The current APK is a debug build.
-- For production distribution, switch Android job to signed release APK/AAB and add Apple code-sign + notarization steps for macOS.
-
-### Internet Distribution (Gatekeeper-safe)
-
-To distribute `Tang!.app` over the internet without the "damaged" warning, configure these GitHub repository secrets:
-
-- `MACOS_CERTIFICATE_P12_BASE64`: Base64 of your Developer ID Application certificate `.p12`
-- `MACOS_CERTIFICATE_PASSWORD`: Password for that `.p12`
-- `MACOS_CODESIGN_IDENTITY`: Example `Developer ID Application: Your Name (TEAMID)`
-- `APPLE_ID`: Apple ID used for notarization
-- `APPLE_APP_SPECIFIC_PASSWORD`: App-specific password for that Apple ID
-- `APPLE_TEAM_ID`: Apple Developer Team ID
-
-When these secrets are present, the workflow signs + notarizes + staples the app before packaging DMG/ZIP.
 
 ## Quick Start
 

@@ -75,75 +75,19 @@ jobs:
             <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
             <key>CFBundleVersion</key><string>${{ github.run_number }}</string>
             <key>LSUIElement</key><true/>
-            <key>NSCameraUsageDescription</key><string>Tang does not use camera directly.</string>
           </dict>
           </plist>
           EOF
-
-      - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' }}
-        env:
-          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        run: |
-          echo "$CERT_B64" | base64 --decode > cert.p12
-          security create-keychain -p "" build.keychain
-          security set-keychain-settings -lut 21600 build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security list-keychains -d user -s build.keychain login.keychain-db
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
-
-      - name: Codesign app bundle (Developer ID)
-        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
-        env:
-          CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
-        run: |
-          codesign --force --deep --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$APP_NAME"
-          codesign --verify --deep --strict --verbose=2 "$APP_NAME"
-
-      - name: Notarize and staple app
-        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' && secrets.MACOS_CODESIGN_IDENTITY != '' }}
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          xcrun notarytool submit "$APP_NAME" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-          xcrun stapler staple "$APP_NAME"
-          spctl --assess --type execute --verbose "$APP_NAME"
-
-      - name: Warn when notarization is skipped
-        if: ${{ secrets.MACOS_CODESIGN_IDENTITY == '' || secrets.APPLE_ID == '' || secrets.APPLE_APP_SPECIFIC_PASSWORD == '' || secrets.APPLE_TEAM_ID == '' }}
-        run: |
-          echo "::warning::Release is unsigned or not notarized. Gatekeeper may block app on other Macs."
-
-      - name: Create DMG
-        run: |
-          hdiutil create -volname "Tang" -srcfolder "Tang!.app" -ov -format UDZO -fs HFS+ "Tang-macOS.dmg"
-
-      - name: Validate DMG
-        run: |
-          hdiutil verify "Tang-macOS.dmg"
-          hdiutil attach -nobrowse -readonly "Tang-macOS.dmg"
-          test -d "/Volumes/Tang/Tang!.app"
-          hdiutil detach "/Volumes/Tang"
 
       - name: Create ZIP fallback
         run: |
           ditto -c -k --sequesterRsrc --keepParent "Tang!.app" "Tang-macOS.zip"
 
-      - name: Upload DMG artifact
+      - name: Upload macOS ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tang-macos-dmg
-          path: |
-            Tang-macOS.dmg
-            Tang-macOS.zip
+          name: tang-macos-zip
+          path: Tang-macOS.zip
 
   release:
     needs:
@@ -170,7 +114,17 @@ jobs:
           name: Auto build ${{ steps.tag.outputs.tag }}
           prerelease: true
           generate_release_notes: true
+          body: |
+            ## macOS install (free distribution)
+            1. Download `Tang-macOS.zip`
+            2. Unzip and move `Tang!.app` to `/Applications`
+            3. Run once in Terminal:
+               `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
+            4. Launch app:
+               `open "/Applications/Tang!.app"`
+
+            ## Android install
+            - Download and install `app-debug.apk`
           files: |
             dist/tang-android-apk/app-debug.apk
-            dist/tang-macos-dmg/Tang-macOS.dmg
-            dist/tang-macos-dmg/Tang-macOS.zip
+            dist/tang-macos-zip/Tang-macOS.zip
