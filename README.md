@@ -28,6 +28,7 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 - Uploaded assets:
   - `app-debug.apk`
   - `Tang-macOS.dmg`
+  - `Tang-macOS.zip` (fallback if DMG mount fails)
 
 Notes:
 

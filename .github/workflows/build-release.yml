@@ -77,13 +77,26 @@ jobs:
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "Tang" -srcfolder "Tang!.app" -ov -format UDZO "Tang-macOS.dmg"
+          hdiutil create -volname "Tang" -srcfolder "Tang!.app" -ov -format UDZO -fs HFS+ "Tang-macOS.dmg"
+
+      - name: Validate DMG
+        run: |
+          hdiutil verify "Tang-macOS.dmg"
+          hdiutil attach -nobrowse -readonly "Tang-macOS.dmg"
+          test -d "/Volumes/Tang/Tang!.app"
+          hdiutil detach "/Volumes/Tang"
+
+      - name: Create ZIP fallback
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "Tang!.app" "Tang-macOS.zip"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: tang-macos-dmg
-          path: Tang-macOS.dmg
+          path: |
+            Tang-macOS.dmg
+            Tang-macOS.zip
 
   release:
     needs:
@@ -113,3 +126,4 @@ jobs:
           files: |
             dist/tang-android-apk/app-debug.apk
             dist/tang-macos-dmg/Tang-macOS.dmg
+            dist/tang-macos-dmg/Tang-macOS.zip
