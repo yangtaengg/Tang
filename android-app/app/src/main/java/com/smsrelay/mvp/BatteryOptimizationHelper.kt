@@ -12,6 +12,18 @@ object BatteryOptimizationHelper {
         return powerManager.isIgnoringBatteryOptimizations(context.packageName)
     }
 
+    fun requestIgnoreBatteryOptimizations(context: Context): Boolean {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val canHandle = intent.resolveActivity(context.packageManager) != null
+        if (canHandle) {
+            context.startActivity(intent)
+            return true
+        }
+        return false
+    }
+
     fun openBatteryOptimizationSettings(context: Context) {
         val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

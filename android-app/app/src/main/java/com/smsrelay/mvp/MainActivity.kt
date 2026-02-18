@@ -1,5 +1,4 @@
 package com.smsrelay.mvp
-
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -8,6 +7,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.tabs.TabLayoutMediator
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.smsrelay.mvp.databinding.ActivityMainBinding
@@ -15,6 +15,7 @@ import com.smsrelay.mvp.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var pairingStore: PairingStore
+    private lateinit var onboardingPagerAdapter: OnboardingPagerAdapter
 
     private val requestCameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -67,32 +68,39 @@ class MainActivity : AppCompatActivity() {
         RelayWebSocketClient.initialize(this)
         ensurePhoneStatePermission()
 
-        binding.openNotificationAccessButton.setOnClickListener {
-            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-        }
-
-        binding.openSamsungNotificationContentButton.setOnClickListener {
-            openSamsungNotificationContentSettings()
-        }
-
-        binding.requestSmsPermissionButton.setOnClickListener {
-            requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
-        }
-
-        binding.scanQrButton.setOnClickListener {
-            requestCameraPermission.launch(Manifest.permission.CAMERA)
-        }
-
-        binding.clearPairingButton.setOnClickListener {
-            pairingStore.clear()
-            RelayWebSocketClient.clearConnection()
-            renderState()
-            Toast.makeText(this, "Pairing cleared", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.openBatterySettingsButton.setOnClickListener {
-            BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
-        }
+        onboardingPagerAdapter = OnboardingPagerAdapter(
+            onOpenNotificationAccess = {
+                startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+            },
+            onOpenSamsungNotificationSettings = {
+                openSamsungNotificationContentSettings()
+            },
+            onRequestSmsPermission = {
+                requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
+            },
+            onScanQr = {
+                requestCameraPermission.launch(Manifest.permission.CAMERA)
+            },
+            onClearPairing = {
+                pairingStore.clear()
+                RelayWebSocketClient.clearConnection()
+                renderState()
+                Toast.makeText(this, "Pairing cleared", Toast.LENGTH_SHORT).show()
+            },
+            onRequestBatteryExclusion = {
+                val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
+                if (!launched) {
+                    BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
+                }
+            },
+            onOpenBatterySettings = {
+                BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
+            }
+        )
+        binding.stepPager.setAdapter(onboardingPagerAdapter)
+        TabLayoutMediator(binding.stepTabs, binding.stepPager) { tab, position ->
+            tab.text = "Step ${position + 1}"
+        }.attach()
     }
 
     override fun onResume() {
@@ -104,34 +112,47 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderState() {
         val notificationAccess = NotificationAccessUtil.isEnabled(this)
-        binding.notificationAccessStatusText.text = if (notificationAccess) {
+        val notificationAccessStatus = if (notificationAccess) {
             "Notification Access: Enabled"
         } else {
             "Notification Access: Disabled"
         }
 
         val pairing = pairingStore.load()
+        val pairingStatus: String
+        val pairingDetails: String
         if (pairing == null) {
-            binding.pairingStatusText.text = "Pairing: Not paired"
-            binding.pairingDetailsText.text = "Scan the QR shown by the macOS app."
+            pairingStatus = "Pairing: Not paired"
+            pairingDetails = "Scan the QR shown by the macOS app."
         } else {
-            binding.pairingStatusText.text = "Pairing: Token saved"
-            binding.pairingDetailsText.text = "${pairing.deviceName}\n${pairing.url}\n(Token saved does not guarantee WebSocket auth connected)"
+            pairingStatus = "Pairing: Token saved"
+            pairingDetails = "${pairing.deviceName}\n${pairing.url}\n(Token saved does not guarantee WebSocket auth connected)"
         }
 
-        val batteryOptimized = !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
-        binding.socketStatusText.text = if (batteryOptimized) {
-            "Battery optimization is ON. Allowing exclusion can improve background reliability."
+        val excluded = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
+        val batteryStatus = if (excluded) {
+            "Battery optimization exclusion: Enabled"
         } else {
-            "Battery optimization exclusion is already enabled for this app."
+            "Battery optimization exclusion: Disabled"
         }
 
         val smsGranted = PermissionHelper.hasSendSmsPermission(this)
-        binding.smsPermissionStatusText.text = if (smsGranted) {
+        val smsPermissionStatus = if (smsGranted) {
             "SMS Permission: Granted"
         } else {
             "SMS Permission: Not granted (reply_sms blocked)"
         }
+
+        onboardingPagerAdapter.updateState(
+            OnboardingUiState(
+                notificationAccessStatus = notificationAccessStatus,
+                smsPermissionStatus = smsPermissionStatus,
+                pairingStatus = pairingStatus,
+                pairingDetails = pairingDetails,
+                batteryStatus = batteryStatus,
+                batteryRequestEnabled = !excluded
+            )
+        )
     }
 
     private fun launchQrScanner() {

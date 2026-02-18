@@ -8,5 +8,6 @@
     <string name="scan_qr">Pair via QR Scan</string>
     <string name="clear_pairing">Clear Pairing</string>
     <string name="open_battery_settings">Battery Optimization Guidance</string>
+    <string name="request_battery_exclusion">Allow Battery Optimization Exclusion</string>
     <string name="request_sms_permission">Grant SMS Send Permission</string>
 </resources>

@@ -184,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private struct OnboardingSettingsView: View {
     @ObservedObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -230,6 +231,11 @@ private struct OnboardingSettingsView: View {
         .padding(16)
         .frame(width: 360, height: 420)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
+        .onChange(of: appState.pairedDeviceName) { newValue in
+            if newValue != nil {
+                dismiss()
+            }
+        }
     }
 }
 
