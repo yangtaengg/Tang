@@ -32,9 +32,22 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 
 Notes:
 
-- The current DMG is unsigned/not notarized (suitable for testing and internal distribution).
+- If signing/notarization secrets are not configured, DMG is unsigned and suitable only for internal/testing.
 - The current APK is a debug build.
 - For production distribution, switch Android job to signed release APK/AAB and add Apple code-sign + notarization steps for macOS.
+
+### Internet Distribution (Gatekeeper-safe)
+
+To distribute `Tang!.app` over the internet without the "damaged" warning, configure these GitHub repository secrets:
+
+- `MACOS_CERTIFICATE_P12_BASE64`: Base64 of your Developer ID Application certificate `.p12`
+- `MACOS_CERTIFICATE_PASSWORD`: Password for that `.p12`
+- `MACOS_CODESIGN_IDENTITY`: Example `Developer ID Application: Your Name (TEAMID)`
+- `APPLE_ID`: Apple ID used for notarization
+- `APPLE_APP_SPECIFIC_PASSWORD`: App-specific password for that Apple ID
+- `APPLE_TEAM_ID`: Apple Developer Team ID
+
+When these secrets are present, the workflow signs + notarizes + staples the app before packaging DMG/ZIP.
 
 ## Quick Start
 

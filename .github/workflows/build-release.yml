@@ -42,6 +42,11 @@ jobs:
 
   macos:
     runs-on: macos-14
+    env:
+      APP_NAME: Tang!.app
+      APP_EXECUTABLE: Tang
+      APP_BUNDLE_ID: com.yangtaengg.tang
+      APP_VERSION: 0.1.0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,11 +57,10 @@ jobs:
 
       - name: Create app bundle
         run: |
-          APP_NAME="Tang!.app"
           mkdir -p "$APP_NAME/Contents/MacOS"
           mkdir -p "$APP_NAME/Contents/Resources"
-          cp macos-menubar/.build/release/SmsRelayMenuBar "$APP_NAME/Contents/MacOS/Tang"
-          chmod +x "$APP_NAME/Contents/MacOS/Tang"
+          cp macos-menubar/.build/release/SmsRelayMenuBar "$APP_NAME/Contents/MacOS/$APP_EXECUTABLE"
+          chmod +x "$APP_NAME/Contents/MacOS/$APP_EXECUTABLE"
 
           cat > "$APP_NAME/Contents/Info.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -65,15 +69,58 @@ jobs:
           <dict>
             <key>CFBundleName</key><string>Tang!</string>
             <key>CFBundleDisplayName</key><string>Tang!</string>
-            <key>CFBundleIdentifier</key><string>com.yangtaengg.tang</string>
-            <key>CFBundleExecutable</key><string>Tang</string>
+            <key>CFBundleIdentifier</key><string>$APP_BUNDLE_ID</string>
+            <key>CFBundleExecutable</key><string>$APP_EXECUTABLE</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>0.1.0</string>
+            <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
             <key>CFBundleVersion</key><string>${{ github.run_number }}</string>
             <key>LSUIElement</key><true/>
+            <key>NSCameraUsageDescription</key><string>Tang does not use camera directly.</string>
           </dict>
           </plist>
           EOF
+
+      - name: Import Developer ID certificate
+        if: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' }}
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERT_B64" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s build.keychain login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+
+      - name: Codesign app bundle (Developer ID)
+        if: ${{ secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+        run: |
+          codesign --force --deep --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$APP_NAME"
+          codesign --verify --deep --strict --verbose=2 "$APP_NAME"
+
+      - name: Notarize and staple app
+        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' && secrets.MACOS_CODESIGN_IDENTITY != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "$APP_NAME" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$APP_NAME"
+          spctl --assess --type execute --verbose "$APP_NAME"
+
+      - name: Warn when notarization is skipped
+        if: ${{ secrets.MACOS_CODESIGN_IDENTITY == '' || secrets.APPLE_ID == '' || secrets.APPLE_APP_SPECIFIC_PASSWORD == '' || secrets.APPLE_TEAM_ID == '' }}
+        run: |
+          echo "::warning::Release is unsigned or not notarized. Gatekeeper may block app on other Macs."
 
       - name: Create DMG
         run: |
