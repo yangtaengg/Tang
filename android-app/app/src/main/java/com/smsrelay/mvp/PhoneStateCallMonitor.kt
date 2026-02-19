@@ -1,16 +1,12 @@
 package com.smsrelay.mvp
 
-import android.Manifest
 import android.content.Context
-import android.os.Build
 import android.telephony.PhoneStateListener
-import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import java.util.UUID
 
 object PhoneStateCallMonitor {
     private var telephonyManager: TelephonyManager? = null
-    private var callback: TelephonyCallback? = null
     private var listener: PhoneStateListener? = null
     private var lastState: Int = TelephonyManager.CALL_STATE_IDLE
 
@@ -26,45 +22,27 @@ object PhoneStateCallMonitor {
         }
         telephonyManager = manager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val callStateCallback = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
-                override fun onCallStateChanged(state: Int) {
-                    handleCallStateChange(state, null)
-                }
+        @Suppress("DEPRECATION")
+        val callStateListener = object : PhoneStateListener() {
+            override fun onCallStateChanged(state: Int, incomingNumber: String?) {
+                handleCallStateChange(state, incomingNumber)
             }
-            callback = callStateCallback
-            manager.registerTelephonyCallback(context.mainExecutor, callStateCallback)
-        } else {
-            @Suppress("DEPRECATION")
-            val callStateListener = object : PhoneStateListener() {
-                override fun onCallStateChanged(state: Int, incomingNumber: String?) {
-                    handleCallStateChange(state, incomingNumber)
-                }
-            }
-            listener = callStateListener
-            @Suppress("DEPRECATION")
-            manager.listen(callStateListener, PhoneStateListener.LISTEN_CALL_STATE)
         }
+        listener = callStateListener
+        @Suppress("DEPRECATION")
+        manager.listen(callStateListener, PhoneStateListener.LISTEN_CALL_STATE)
     }
 
     @Synchronized
     fun stop() {
         val manager = telephonyManager ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val currentCallback = callback
-            if (currentCallback != null) {
-                manager.unregisterTelephonyCallback(currentCallback)
-            }
-            callback = null
-        } else {
+        @Suppress("DEPRECATION")
+        val currentListener = listener
+        if (currentListener != null) {
             @Suppress("DEPRECATION")
-            val currentListener = listener
-            if (currentListener != null) {
-                @Suppress("DEPRECATION")
-                manager.listen(currentListener, PhoneStateListener.LISTEN_NONE)
-            }
-            listener = null
+            manager.listen(currentListener, PhoneStateListener.LISTEN_NONE)
         }
+        listener = null
         telephonyManager = null
         lastState = TelephonyManager.CALL_STATE_IDLE
     }
@@ -78,15 +56,20 @@ object PhoneStateCallMonitor {
             return
         }
 
-        val number = incomingNumber?.trim().orEmpty().ifBlank { "Unknown caller" }
-        RelayWebSocketClient.enqueueIncomingCall(
-            RelayCallEvent(
-                id = UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
-                from = number,
-                name = null
-            )
+        val number = incomingNumber?.trim().orEmpty()
+        if (number.isBlank()) {
+            return
+        }
+        val event = RelayCallEvent(
+            id = UUID.randomUUID().toString(),
+            timestamp = System.currentTimeMillis(),
+            from = number,
+            name = null
         )
+        if (NotificationDeduper.isDuplicate(event)) {
+            return
+        }
+        RelayWebSocketClient.enqueueIncomingCall(event)
     }
 
     private fun hasPhoneStatePermission(context: Context): Boolean {

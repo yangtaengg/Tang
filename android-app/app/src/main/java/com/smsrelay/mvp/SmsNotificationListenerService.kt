@@ -23,6 +23,11 @@ class SmsNotificationListenerService : NotificationListenerService() {
         val active = activeNotifications ?: emptyArray()
         QuickReplyStore.refreshFromActiveNotifications(active)
 
+        val callEvent = CallNotificationParser.parse(sbn)
+        if (callEvent != null && !NotificationDeduper.isDuplicate(callEvent)) {
+            RelayWebSocketClient.enqueueIncomingCall(callEvent)
+        }
+
         val fallbackReplyKey = QuickReplyStore.fallbackReplyKeyFor(sbn, active)
         val event = SmsNotificationParser.parse(sbn, fallbackReplyKey) ?: return
         if (NotificationDeduper.isDuplicate(event)) {

@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -9,6 +10,7 @@ final class AppState: ObservableObject {
     @Published var pairingHost: String = LocalNetworkInfo.defaultIPv4()
     @Published var pairingPort: UInt16 = 8765
     @Published var pairingExpiresAt: Date = .distantFuture
+    @Published private(set) var pairingCode: String = "000000"
     @Published var qrImage: NSImage?
     @Published var qrPayloadString: String = ""
     @Published private(set) var pairedDeviceName: String?
@@ -57,7 +59,9 @@ final class AppState: ObservableObject {
         }
 
         pairingPort = initialPort
-        server = WebSocketServer(config: .init(port: initialPort, token: token))
+        let initialPairingCode = Self.makePairingCode(from: token)
+        pairingCode = initialPairingCode
+        server = WebSocketServer(config: .init(port: initialPort, token: token, pairingCode: initialPairingCode))
         server.onServerStateChanged = { [weak self] state in
             Task { @MainActor in
                 self?.serverState = state
@@ -123,9 +127,18 @@ final class AppState: ObservableObject {
         token = TokenFactory.randomBase64Token()
         try? KeychainStore.saveToken(token)
         server.updateToken(token)
+        pairingCode = Self.makePairingCode(from: token)
+        server.updatePairingCode(pairingCode)
         pairedDeviceName = nil
         pairedAppVersion = nil
         refreshPairingQR()
+    }
+
+    private static func makePairingCode(from token: String) -> String {
+        let digest = SHA256.hash(data: Data(token.utf8))
+        let value = digest.prefix(4).reduce(0) { ($0 << 8) | UInt64($1) }
+        let code = value % 1_000_000
+        return String(format: "%06llu", code)
     }
 
     func openPairDeviceWindow() {
@@ -292,7 +305,7 @@ final class AppState: ObservableObject {
 
     private func notifyIncomingCall(_ call: IncomingCallEvent) {
         let title = "Incoming Call"
-        let body = call.displayName == call.from ? call.from : "\(call.displayName) (\(call.from))"
+        let body = call.displayLine
 
         guard Bundle.main.bundleURL.pathExtension == "app" else {
             showFallbackCallNotification(title: title, body: body)
@@ -544,49 +557,67 @@ private struct FallbackMessageToastView: View {
     let onCopyCode: () -> Void
     let onClose: () -> Void
 
+    private var timeText: String {
+        message.timestamp.formatted(date: .omitted, time: .shortened)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Tang!")
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.85))
+                    .frame(width: 7, height: 7)
+                Text("New message")
+                    .font(.system(size: 12, weight: .semibold))
                 Spacer()
-                Text("New SMS")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text(timeText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Button(action: onOpenDetail) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(message.timestamp.formatted(date: .omitted, time: .shortened))  \(message.from)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(message.formattedFrom)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
                     Text(message.body)
-                        .font(.body)
-                        .lineLimit(4)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 8) {
-                Button("복사", action: onCopy)
+            HStack(spacing: 6) {
+                Button("Copy", action: onCopy)
                 if hasVerificationCode {
-                    Button("인증번호 복사", action: onCopyCode)
+                    Button("Copy code", action: onCopyCode)
                 }
                 Spacer()
-                Button("닫기", action: onClose)
+                Button("Close", action: onClose)
             }
-            .font(.system(size: 13, weight: .semibold))
-            .controlSize(.large)
+            .font(.system(size: 12, weight: .semibold))
+            .controlSize(.regular)
             .buttonStyle(.bordered)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .frame(width: 380, height: 162)
-        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.ultraThinMaterial)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
+        )
     }
 }
 
@@ -596,35 +627,44 @@ private struct FallbackCallToastView: View {
     let onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Tang!")
-                    .font(.headline)
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.green.opacity(0.85))
+                    .frame(width: 7, height: 7)
                 Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
             }
 
             Text(messageText)
-                .font(.body)
-                .lineLimit(3)
+                .font(.system(size: 12))
+                .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             HStack {
                 Spacer()
-                Button("닫기", action: onClose)
-                    .font(.system(size: 13, weight: .semibold))
-                    .controlSize(.large)
+                Button("Close", action: onClose)
+                    .font(.system(size: 12, weight: .semibold))
+                    .controlSize(.regular)
                     .buttonStyle(.bordered)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .frame(width: 360, height: 108)
-        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.ultraThinMaterial)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
+        )
     }
 }
