@@ -95,6 +95,9 @@ jobs:
       - macos
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -110,6 +113,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           cat > release-notes.md <<'EOF'
@@ -128,6 +132,7 @@ jobs:
           gh release create "$TAG" \
             dist/tang-android-apk/app-debug.apk \
             dist/tang-macos-zip/Tang-macOS.zip \
+            --repo "$GH_REPO" \
             --title "Auto build $TAG" \
             --notes-file release-notes.md \
             --prerelease
