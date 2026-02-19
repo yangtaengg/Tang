@@ -108,23 +108,26 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Auto build ${{ steps.tag.outputs.tag }}
-          prerelease: true
-          generate_release_notes: true
-          body: |
-            ## macOS install (free distribution)
-            1. Download `Tang-macOS.zip`
-            2. Unzip and move `Tang!.app` to `/Applications`
-            3. Run once in Terminal:
-               `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
-            4. Launch app:
-               `open "/Applications/Tang!.app"`
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## macOS install (free distribution)
+          1. Download `Tang-macOS.zip`
+          2. Unzip and move `Tang!.app` to `/Applications`
+          3. Run once in Terminal:
+             `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
+          4. Launch app:
+             `open "/Applications/Tang!.app"`
 
-            ## Android install
-            - Download and install `app-debug.apk`
-          files: |
-            dist/tang-android-apk/app-debug.apk
-            dist/tang-macos-zip/Tang-macOS.zip
+          ## Android install
+          - Download and install `app-debug.apk`
+          EOF
+
+          gh release create "$TAG" \
+            dist/tang-android-apk/app-debug.apk \
+            dist/tang-macos-zip/Tang-macOS.zip \
+            --title "Auto build $TAG" \
+            --notes-file release-notes.md \
+            --prerelease
