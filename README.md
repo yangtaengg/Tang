@@ -15,8 +15,8 @@ Tang! relays Android notification-based messages and call alerts to a macOS menu
 - Download the latest ZIP from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
 - Unzip and move `Tang!.app` to Applications.
 - First run in Terminal:
-  - `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
-  - `open "/Applications/Tang!.app"`
+  - `xattr -dr com.apple.quarantine '/Applications/Tang!.app'`
+  - `open '/Applications/Tang!.app'`
 
 ### Android app (APK)
 
