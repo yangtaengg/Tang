@@ -5,6 +5,7 @@ final class WebSocketServer {
     struct Config {
         let port: UInt16
         let token: String
+        let pairingCode: String
     }
 
     var onSmsMessage: ((SmsMessage) -> Void)?
@@ -27,7 +28,11 @@ final class WebSocketServer {
     }
 
     func updateToken(_ token: String) {
-        config = Config(port: config.port, token: token)
+        config = Config(port: config.port, token: token, pairingCode: config.pairingCode)
+    }
+
+    func updatePairingCode(_ pairingCode: String) {
+        config = Config(port: config.port, token: config.token, pairingCode: pairingCode)
     }
 
     func start() {
@@ -176,7 +181,7 @@ final class WebSocketServer {
                 return
             }
             let token = object["token"] as? String ?? ""
-            if token == config.token {
+            if token == config.token || token == config.pairingCode {
                 authenticatedClients.insert(clientId)
                 notifyAuthenticatedClientCountChanged()
                 send(["type": "auth.ok"], to: connection)
