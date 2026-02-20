@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/tang_bg"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="12dp">
 
     <TextView
         android:id="@+id/titleText"
@@ -19,15 +19,21 @@
         android:id="@+id/policyText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textAppearance="@style/TangBodyText"
-        android:text="@string/policy_summary" />
+        android:layout_marginTop="4dp"
+        android:text="@string/policy_summary"
+        android:textAppearance="@style/TangCaptionText" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:background="@color/tang_stroke" />
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/stepTabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="8dp"
         app:tabIndicatorColor="@color/tang_primary"
         app:tabIndicatorHeight="3dp"
         app:tabIndicatorFullWidth="false"
@@ -42,8 +48,8 @@
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
         android:clipToPadding="false"
-        android:paddingLeft="2dp"
-        android:paddingRight="2dp"
+        android:paddingLeft="0dp"
+        android:paddingRight="0dp"
         android:layout_weight="1" />
 
 </LinearLayout>

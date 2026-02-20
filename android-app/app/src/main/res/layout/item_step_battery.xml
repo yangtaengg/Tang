@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="match_parent"
@@ -19,20 +19,33 @@
             android:text="Step 4. Battery optimization"
             />
 
-        <TextView
-            android:id="@+id/socketStatusText"
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Tang.InsetPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textAppearance="@style/TangBodyText"
-            android:textStyle="bold" />
+            android:layout_marginTop="8dp">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textAppearance="@style/TangBodyText"
-            android:text="Allow battery optimization exclusion for better background reliability." />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:id="@+id/socketStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TangBodyText"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Allow battery optimization exclusion for better background reliability."
+                    android:textAppearance="@style/TangCaptionText" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <Button
             android:id="@+id/requestBatteryExclusionButton"

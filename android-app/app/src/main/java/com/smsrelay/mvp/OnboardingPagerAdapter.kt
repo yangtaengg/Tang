@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
 data class OnboardingUiState(
@@ -13,7 +14,10 @@ data class OnboardingUiState(
     val pairingStatus: String,
     val pairingDetails: String,
     val batteryStatus: String,
-    val batteryRequestEnabled: Boolean
+    val batteryRequestEnabled: Boolean,
+    val notificationAccessGranted: Boolean,
+    val smsPermissionGranted: Boolean,
+    val batteryExcluded: Boolean
 )
 
 class OnboardingPagerAdapter(
@@ -33,7 +37,10 @@ class OnboardingPagerAdapter(
         pairingStatus = "Pairing: Unknown",
         pairingDetails = "",
         batteryStatus = "Battery optimization exclusion: Unknown",
-        batteryRequestEnabled = true
+        batteryRequestEnabled = true,
+        notificationAccessGranted = false,
+        smsPermissionGranted = false,
+        batteryExcluded = false
     )
 
     fun updateState(newState: OnboardingUiState) {
@@ -67,13 +74,27 @@ class OnboardingPagerAdapter(
     }
 
     private fun bindNotificationStep(holder: StepViewHolder) {
-        holder.view.findViewById<TextView>(R.id.notificationAccessStatusText).text = state.notificationAccessStatus
+        val statusText = holder.view.findViewById<TextView>(R.id.notificationAccessStatusText)
+        statusText.text = state.notificationAccessStatus
+        statusText.setTextColor(
+            ContextCompat.getColor(
+                holder.view.context,
+                if (state.notificationAccessGranted) R.color.tang_success else R.color.tang_body
+            )
+        )
         holder.view.findViewById<Button>(R.id.openNotificationAccessButton).setOnClickListener { onOpenNotificationAccess() }
         holder.view.findViewById<Button>(R.id.openSamsungNotificationContentButton).setOnClickListener { onOpenSamsungNotificationSettings() }
     }
 
     private fun bindSmsStep(holder: StepViewHolder) {
-        holder.view.findViewById<TextView>(R.id.smsPermissionStatusText).text = state.smsPermissionStatus
+        val statusText = holder.view.findViewById<TextView>(R.id.smsPermissionStatusText)
+        statusText.text = state.smsPermissionStatus
+        statusText.setTextColor(
+            ContextCompat.getColor(
+                holder.view.context,
+                if (state.smsPermissionGranted) R.color.tang_success else R.color.tang_body
+            )
+        )
         holder.view.findViewById<Button>(R.id.requestSmsPermissionButton).setOnClickListener { onRequestSmsPermission() }
     }
 
@@ -86,7 +107,14 @@ class OnboardingPagerAdapter(
     }
 
     private fun bindBatteryStep(holder: StepViewHolder) {
-        holder.view.findViewById<TextView>(R.id.socketStatusText).text = state.batteryStatus
+        val statusText = holder.view.findViewById<TextView>(R.id.socketStatusText)
+        statusText.text = state.batteryStatus
+        statusText.setTextColor(
+            ContextCompat.getColor(
+                holder.view.context,
+                if (state.batteryExcluded) R.color.tang_success else R.color.tang_body
+            )
+        )
         holder.view.findViewById<Button>(R.id.requestBatteryExclusionButton).apply {
             isEnabled = state.batteryRequestEnabled
             setOnClickListener { onRequestBatteryExclusion() }

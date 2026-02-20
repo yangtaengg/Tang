@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderState() {
         val notificationAccess = NotificationAccessUtil.isEnabled(this)
         val notificationAccessStatus = if (notificationAccess) {
-            "Notification Access: Enabled"
+            "✓ Notification Access: Enabled"
         } else {
             "Notification Access: Disabled"
         }
@@ -144,14 +144,14 @@ class MainActivity : AppCompatActivity() {
 
         val excluded = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
         val batteryStatus = if (excluded) {
-            "Battery optimization exclusion: Enabled"
+            "✓ Battery optimization exclusion: Enabled"
         } else {
             "Battery optimization exclusion: Disabled"
         }
 
         val smsGranted = PermissionHelper.hasSendSmsPermission(this)
         val smsPermissionStatus = if (smsGranted) {
-            "SMS Permission: Granted"
+            "✓ SMS Permission: Granted"
         } else {
             "SMS Permission: Not granted (reply_sms blocked)"
         }
@@ -163,7 +163,10 @@ class MainActivity : AppCompatActivity() {
                 pairingStatus = pairingStatus,
                 pairingDetails = pairingDetails,
                 batteryStatus = batteryStatus,
-                batteryRequestEnabled = !excluded
+                batteryRequestEnabled = !excluded,
+                notificationAccessGranted = notificationAccess,
+                smsPermissionGranted = smsGranted,
+                batteryExcluded = excluded
             )
         )
     }

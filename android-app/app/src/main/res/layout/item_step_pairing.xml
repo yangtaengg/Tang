@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="match_parent"
@@ -19,20 +19,33 @@
             android:text="Step 3. Pair with Mac"
             />
 
-        <TextView
-            android:id="@+id/pairingStatusText"
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Tang.InsetPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textAppearance="@style/TangBodyText"
-            android:textStyle="bold" />
+            android:layout_marginTop="8dp">
 
-        <TextView
-            android:id="@+id/pairingDetailsText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textAppearance="@style/TangBodyText" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:id="@+id/pairingStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TangBodyText"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/pairingDetailsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="@style/TangCaptionText" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <Button
             android:id="@+id/scanQrButton"

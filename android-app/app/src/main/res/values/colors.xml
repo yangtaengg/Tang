@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FF7E7E</color>
-    <color name="tang_bg">#F6F7FB</color>
-    <color name="tang_card">#FFFFFFFF</color>
-    <color name="tang_stroke">#E5E7EF</color>
-    <color name="tang_primary">#2E6BFF</color>
+    <color name="tang_bg">#F4F4F7</color>
+    <color name="tang_card">#FFFDFDFE</color>
+    <color name="tang_stroke">#E0E2E8</color>
+    <color name="tang_panel">#14A0A8B5</color>
+    <color name="tang_primary">#2F6BFA</color>
     <color name="tang_on_primary">#FFFFFF</color>
-    <color name="tang_title">#0F172A</color>
-    <color name="tang_body">#475569</color>
+    <color name="tang_success">#1FA873</color>
+    <color name="tang_title">#1F2937</color>
+    <color name="tang_body">#5F6B7A</color>
 </resources>
