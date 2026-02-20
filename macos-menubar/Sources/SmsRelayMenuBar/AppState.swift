@@ -48,6 +48,7 @@ final class AppState: ObservableObject {
     private var fallbackNotificationMessage: SmsMessage?
     private var fallbackGlobalClickMonitor: Any?
     private var fallbackLocalClickMonitor: Any?
+    private let fallbackToastDuration: TimeInterval = 8
     private static let nonExpiringExpiresAtMs: Int64 = 253402300799000
 
     init() {
@@ -289,11 +290,13 @@ final class AppState: ObservableObject {
 
     private func notify(_ message: SmsMessage) {
         showFallbackNotification(message: message)
+        playAlertSound(.sms)
 
         if Bundle.main.bundleURL.pathExtension == "app" {
             let content = UNMutableNotificationContent()
             content.title = message.from
             content.body = message.body
+            content.sound = .default
             let request = UNNotificationRequest(
                 identifier: message.id,
                 content: content,
@@ -306,21 +309,53 @@ final class AppState: ObservableObject {
     private func notifyIncomingCall(_ call: IncomingCallEvent) {
         let title = "Incoming Call"
         let body = call.displayLine
+        playAlertSound(.call)
 
         guard Bundle.main.bundleURL.pathExtension == "app" else {
-            showFallbackCallNotification(title: title, body: body)
+            showFallbackCallNotification(
+                title: title,
+                body: body,
+                onHangUp: { [weak self] in
+                    _ = self?.server.sendCallHangup()
+                }
+            )
             return
         }
 
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
+        content.sound = .default
         let request = UNNotificationRequest(
             identifier: "call-\(call.id)",
             content: content,
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request)
+    }
+
+    private enum AlertSoundKind {
+        case sms
+        case call
+    }
+
+    private func playAlertSound(_ kind: AlertSoundKind) {
+        let customName = kind == .call ? "iphone_ringtone" : "iphone_sms"
+        if let custom = NSSound(named: customName) {
+            custom.play()
+            return
+        }
+
+        let fallbackNames: [String] = kind == .call
+            ? ["Submarine", "Funk", "Ping"]
+            : ["Pop", "Glass", "Hero", "Ping"]
+
+        for name in fallbackNames {
+            if let sound = NSSound(named: name) {
+                sound.play()
+                return
+            }
+        }
     }
 
     private func closePairingWindowIfOpen() {
@@ -404,13 +439,17 @@ final class AppState: ObservableObject {
         fallbackNotificationWindow = panel
         installFallbackDismissMonitor()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self, weak panel] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
             guard let panel else { return }
             self?.closeFallbackPanelIfActive(panel)
         }
     }
 
-    private func showFallbackCallNotification(title: String, body: String) {
+    private func showFallbackCallNotification(
+        title: String,
+        body: String,
+        onHangUp: @escaping () -> Void
+    ) {
         fallbackNotificationWindow?.close()
         fallbackNotificationMessage = nil
 
@@ -430,6 +469,7 @@ final class AppState: ObservableObject {
         panel.contentView = NSHostingView(rootView: FallbackCallToastView(
             title: title,
             messageText: body,
+            onHangUp: onHangUp,
             onClose: { [weak self] in
                 self?.closeFallbackPanelIfActive(panel)
             }
@@ -450,7 +490,7 @@ final class AppState: ObservableObject {
         fallbackNotificationWindow = panel
         installFallbackDismissMonitor()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self, weak panel] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
             guard let panel else { return }
             self?.closeFallbackPanelIfActive(panel)
         }
@@ -624,6 +664,7 @@ private struct FallbackMessageToastView: View {
 private struct FallbackCallToastView: View {
     let title: String
     let messageText: String
+    let onHangUp: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -645,7 +686,15 @@ private struct FallbackCallToastView: View {
                 .padding(.vertical, 7)
                 .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            HStack {
+            HStack(spacing: 8) {
+                Button("Hang up") {
+                    onHangUp()
+                    onClose()
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .controlSize(.regular)
+                .buttonStyle(.borderedProminent)
+
                 Spacer()
                 Button("Close", action: onClose)
                     .font(.system(size: 12, weight: .semibold))
@@ -655,7 +704,7 @@ private struct FallbackCallToastView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .frame(width: 360, height: 108)
+        .frame(width: 360, height: 120)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(.ultraThinMaterial)

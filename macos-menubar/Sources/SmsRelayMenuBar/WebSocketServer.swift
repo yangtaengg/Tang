@@ -124,6 +124,20 @@ final class WebSocketServer {
         }
     }
 
+    func sendCallHangup() -> Bool {
+        queue.sync {
+            guard let clientId = authenticatedClients.first,
+                  let connection = clients[clientId] else {
+                return false
+            }
+            let payload: [String: Any] = [
+                "type": "call.hangup"
+            ]
+            send(payload, to: connection)
+            return true
+        }
+    }
+
     private func accept(_ connection: NWConnection) {
         let id = UUID()
         clients[id] = connection

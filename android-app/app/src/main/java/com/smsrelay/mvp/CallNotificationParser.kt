@@ -17,14 +17,17 @@ object CallNotificationParser {
     fun parse(sbn: StatusBarNotification): RelayCallEvent? {
         val notification = sbn.notification
         val category = notification.category.orEmpty()
-        if (category != Notification.CATEGORY_CALL && !knownDialerPackages.contains(sbn.packageName)) {
-            return null
-        }
-
         val extras = notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim().orEmpty()
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim().orEmpty()
+
+        val fromKnownDialer = knownDialerPackages.contains(sbn.packageName)
+        val isCallCategory = category == Notification.CATEGORY_CALL
+        val looksLikeCall = isSystemCallLabel(title) || isSystemCallLabel(text) || isSystemCallLabel(subText)
+        if (!fromKnownDialer && !isCallCategory && !looksLikeCall) {
+            return null
+        }
 
         val number = normalizePhone(
             extractPhoneCandidate(title)
@@ -32,14 +35,23 @@ object CallNotificationParser {
                 ?: extractPhoneCandidate(subText)
         )
 
+        val titleIsSystemLabel = isSystemCallLabel(title)
+        val textIsSystemLabel = isSystemCallLabel(text)
         val name = when {
             title.isBlank() -> null
             normalizePhone(title) != null -> null
-            isSystemCallLabel(title) -> null
+            titleIsSystemLabel -> null
             else -> title
         }
 
-        val from = number ?: title.ifBlank { text.ifBlank { "Unknown caller" } }
+        val from = number
+            ?: if (titleIsSystemLabel) {
+                text.takeUnless { text.isBlank() || textIsSystemLabel }
+                    ?: subText.takeUnless { subText.isBlank() || isSystemCallLabel(subText) }
+                    ?: "Unknown caller"
+            } else {
+                title.ifBlank { text.ifBlank { "Unknown caller" } }
+            }
 
         return RelayCallEvent(
             id = UUID.randomUUID().toString(),

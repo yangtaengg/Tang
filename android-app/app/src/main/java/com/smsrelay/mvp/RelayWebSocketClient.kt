@@ -98,6 +98,9 @@ object RelayWebSocketClient {
                     "reply_sms" -> {
                         handleReplySmsCommand(message)
                     }
+                    "call.hangup" -> {
+                        handleCallHangUpCommand()
+                    }
                     "pong" -> Unit
                 }
             }
@@ -309,6 +312,17 @@ object RelayWebSocketClient {
             }
             cacheReplySmsResult(clientMsgId, success = false, reason = reason)
             sendReplySmsResult(clientMsgId, success = false, reason = reason)
+        }
+    }
+
+    @Synchronized
+    private fun handleCallHangUpCommand() {
+        val result = SmsNotificationListenerService.hangUpIncomingCall()
+        if (result.isSuccess) {
+            Log.i(TAG, "Call hang-up action sent")
+        } else {
+            val reason = result.exceptionOrNull()?.message ?: "unknown"
+            Log.w(TAG, "Call hang-up failed: $reason")
         }
     }
 

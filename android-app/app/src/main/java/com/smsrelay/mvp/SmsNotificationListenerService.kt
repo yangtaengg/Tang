@@ -4,8 +4,20 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 class SmsNotificationListenerService : NotificationListenerService() {
+    companion object {
+        @Volatile
+        private var instance: SmsNotificationListenerService? = null
+
+        fun hangUpIncomingCall(): Result<Unit> {
+            val service = instance ?: return Result.failure(IllegalStateException("notification listener unavailable"))
+            val active = service.activeNotifications ?: emptyArray()
+            return CallActionExecutor.hangUpFrom(active)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        instance = this
         RelayWebSocketClient.initialize(this)
         PhoneStateCallMonitor.start(this)
     }
@@ -43,6 +55,9 @@ class SmsNotificationListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (instance === this) {
+            instance = null
+        }
         PhoneStateCallMonitor.stop()
     }
 }
