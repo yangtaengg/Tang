@@ -21,6 +21,7 @@ class OnboardingPagerAdapter(
     private val onOpenSamsungNotificationSettings: () -> Unit,
     private val onRequestSmsPermission: () -> Unit,
     private val onScanQr: () -> Unit,
+    private val onManualPair: () -> Unit,
     private val onClearPairing: () -> Unit,
     private val onRequestBatteryExclusion: () -> Unit,
     private val onOpenBatterySettings: () -> Unit
@@ -80,6 +81,7 @@ class OnboardingPagerAdapter(
         holder.view.findViewById<TextView>(R.id.pairingStatusText).text = state.pairingStatus
         holder.view.findViewById<TextView>(R.id.pairingDetailsText).text = state.pairingDetails
         holder.view.findViewById<Button>(R.id.scanQrButton).setOnClickListener { onScanQr() }
+        holder.view.findViewById<Button>(R.id.manualPairButton).setOnClickListener { onManualPair() }
         holder.view.findViewById<Button>(R.id.clearPairingButton).setOnClickListener { onClearPairing() }
     }
 

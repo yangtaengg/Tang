@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/Widget.Tang.Card"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    app:cardCornerRadius="14dp"
-    app:cardUseCompatPadding="true">
+    >
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -15,24 +15,28 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textAppearance="@style/TangStepTitle"
             android:text="Step 2. SMS permission"
-            android:textStyle="bold" />
+            />
 
         <TextView
             android:id="@+id/smsPermissionStatusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:textAppearance="@style/TangBodyText"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:textAppearance="@style/TangBodyText"
             android:text="Grant SMS permission if you want Mac-triggered reply sending." />
 
         <Button
             android:id="@+id/requestSmsPermissionButton"
+            style="@style/Widget.Tang.ButtonPrimary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"

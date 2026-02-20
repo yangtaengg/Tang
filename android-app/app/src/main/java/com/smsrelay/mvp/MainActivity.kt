@@ -4,10 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
+import android.text.InputFilter
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.tabs.TabLayoutMediator
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.smsrelay.mvp.databinding.ActivityMainBinding
@@ -51,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         val parsed = pairingStore.parseQrJson(content)
         parsed.onSuccess { payload ->
             pairingStore.save(payload)
+            RelayWebSocketClient.clearConnection()
             RelayWebSocketClient.connectIfNeeded()
             Toast.makeText(this, "Paired with ${payload.deviceName}", Toast.LENGTH_SHORT).show()
             renderState()
@@ -81,6 +86,9 @@ class MainActivity : AppCompatActivity() {
             onScanQr = {
                 requestCameraPermission.launch(Manifest.permission.CAMERA)
             },
+            onManualPair = {
+                showManualPairDialog()
+            },
             onClearPairing = {
                 pairingStore.clear()
                 RelayWebSocketClient.clearConnection()
@@ -99,7 +107,12 @@ class MainActivity : AppCompatActivity() {
         )
         binding.stepPager.setAdapter(onboardingPagerAdapter)
         TabLayoutMediator(binding.stepTabs, binding.stepPager) { tab, position ->
-            tab.text = "Step ${position + 1}"
+            tab.text = when (position) {
+                0 -> "Alerts"
+                1 -> "SMS"
+                2 -> "Pair"
+                else -> "Battery"
+            }
         }.attach()
     }
 
@@ -162,6 +175,85 @@ class MainActivity : AppCompatActivity() {
         options.setBeepEnabled(false)
         options.setOrientationLocked(true)
         scanLauncher.launch(options)
+    }
+
+    private fun showManualPairDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_manual_pair, null)
+        val hostInput = dialogView.findViewById<android.widget.EditText>(R.id.manualPairHostInput)
+        val pinInputs = listOf(
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit1),
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit2),
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit3),
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit4),
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit5),
+            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit6)
+        )
+
+        hostInput.setText("10.0.2.2")
+        pinInputs.forEachIndexed { index, editText ->
+            editText.filters = arrayOf(InputFilter.LengthFilter(1))
+            editText.doAfterTextChanged { text ->
+                if (text?.length == 1 && index < pinInputs.lastIndex) {
+                    pinInputs[index + 1].requestFocus()
+                }
+            }
+            editText.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN && editText.text.isEmpty() && index > 0) {
+                    pinInputs[index - 1].requestFocus()
+                    pinInputs[index - 1].setSelection(pinInputs[index - 1].text.length)
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        pinInputs.first().requestFocus()
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.manual_pair_dialog_title))
+            .setView(dialogView)
+            .setNegativeButton(getString(R.string.manual_pair_cancel), null)
+            .setPositiveButton(getString(R.string.manual_pair_confirm), null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val code = pinInputs.joinToString(separator = "") { it.text?.toString().orEmpty() }
+                val ok = pairWithCode(hostInput.text?.toString().orEmpty(), code)
+                if (ok) {
+                    dialog.dismiss()
+                }
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun pairWithCode(hostRaw: String, codeRaw: String): Boolean {
+        val host = hostRaw.trim()
+        val code = codeRaw.trim().replace(Regex("\\D"), "")
+        if (host.isBlank()) {
+            Toast.makeText(this, "Host is required (emulator: 10.0.2.2)", Toast.LENGTH_LONG).show()
+            return false
+        }
+        if (!code.matches(Regex("\\d{6}"))) {
+            Toast.makeText(this, "Enter 6-digit code", Toast.LENGTH_LONG).show()
+            return false
+        }
+
+        val payload = QrPayload(
+            version = 1,
+            url = "ws://$host:8765/ws",
+            pairingToken = code,
+            expiresAtMs = Long.MAX_VALUE,
+            deviceName = "Mac"
+        )
+        pairingStore.save(payload)
+        RelayWebSocketClient.clearConnection()
+        RelayWebSocketClient.connectIfNeeded()
+        Toast.makeText(this, "Pair code saved. Connecting...", Toast.LENGTH_SHORT).show()
+        renderState()
+        return true
     }
 
     private fun openSamsungNotificationContentSettings() {

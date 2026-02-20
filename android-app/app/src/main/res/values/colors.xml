@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Refined coral for iOS-style premium look -->
     <color name="ic_launcher_background">#FF7E7E</color>
+    <color name="tang_bg">#F6F7FB</color>
+    <color name="tang_card">#FFFFFFFF</color>
+    <color name="tang_stroke">#E5E7EF</color>
+    <color name="tang_primary">#2E6BFF</color>
+    <color name="tang_on_primary">#FFFFFF</color>
+    <color name="tang_title">#0F172A</color>
+    <color name="tang_body">#475569</color>
 </resources>

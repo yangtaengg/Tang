@@ -10,4 +10,13 @@
     <string name="open_battery_settings">Battery Optimization Guidance</string>
     <string name="request_battery_exclusion">Allow Battery Optimization Exclusion</string>
     <string name="request_sms_permission">Grant SMS Send Permission</string>
+    <string name="manual_pair_host_hint">10.0.2.2</string>
+    <string name="manual_pair_code_hint">6-digit code</string>
+    <string name="manual_pair_connect">Pair via 6-digit Code</string>
+    <string name="manual_pair_dialog_title">Connect with 6-digit PIN</string>
+    <string name="manual_pair_dialog_subtitle">Enter Mac host and the PIN shown in Tang! Settings.</string>
+    <string name="manual_pair_host_label">Mac host</string>
+    <string name="manual_pair_code_label">6-digit PIN</string>
+    <string name="manual_pair_cancel">Cancel</string>
+    <string name="manual_pair_confirm">Connect</string>
 </resources>

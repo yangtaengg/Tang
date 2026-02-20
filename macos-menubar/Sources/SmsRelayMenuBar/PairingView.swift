@@ -26,6 +26,13 @@ struct PairingView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
+                Text("6-digit Pair Code")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(appState.pairingCode)
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                    .textSelection(.enabled)
+
                 Text("Mac IP / Host")
                     .font(.caption)
                     .foregroundStyle(.secondary)
