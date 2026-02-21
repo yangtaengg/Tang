@@ -63,3 +63,12 @@ Android data source is notification access (`NotificationListenerService`) only.
 ## Support
 
 - Buy me a coffee: `https://www.buymeacoffee.com/yangtaengg`
+
+## Promo Homepage
+
+- Static landing page source: `website/index.html`
+- Style file: `website/styles.css`
+- Public URL (GitHub Pages): `https://yangtaengg.github.io/Tang/`
+- Local preview:
+  - `cd website && python3 -m http.server 8080`
+  - Open `http://localhost:8080`

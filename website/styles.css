@@ -1,0 +1,194 @@
+:root {
+  --bg: #f4f6fb;
+  --text: #111827;
+  --muted: #5b6475;
+  --card: rgba(255, 255, 255, 0.86);
+  --stroke: rgba(166, 176, 196, 0.35);
+  --primary: #2f6bfa;
+  --primary-ink: #ffffff;
+  --secondary: #eef2ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", Roboto, sans-serif;
+  color: var(--text);
+  background: linear-gradient(160deg, #f6f8ff 0%, #f3f5fb 45%, #eef2ff 100%);
+  min-height: 100vh;
+}
+
+.container {
+  width: min(980px, 92vw);
+  margin: 28px auto 56px;
+  position: relative;
+  z-index: 1;
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+}
+
+.features {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.card {
+  border: 1px solid var(--stroke);
+  background: var(--card);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.08);
+}
+
+.hero h1 {
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.08;
+  margin: 8px 0 10px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.cta-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: #1f3a8a;
+  border-color: rgba(47, 107, 250, 0.16);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--stroke);
+}
+
+.feature h2,
+.install h2,
+.note h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.feature p,
+.note p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.install {
+  margin-top: 14px;
+}
+
+.install ol {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+code {
+  background: #eef2ff;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #1e3a8a;
+}
+
+.note {
+  margin-top: 14px;
+}
+
+.bg-orb {
+  position: fixed;
+  border-radius: 999px;
+  filter: blur(40px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bg-orb-a {
+  width: 300px;
+  height: 300px;
+  background: rgba(106, 138, 255, 0.24);
+  top: -70px;
+  right: -30px;
+}
+
+.bg-orb-b {
+  width: 240px;
+  height: 240px;
+  background: rgba(80, 211, 155, 0.2);
+  bottom: -60px;
+  left: -40px;
+}
+
+@media (max-width: 820px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    margin-top: 16px;
+  }
+
+  .card {
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
