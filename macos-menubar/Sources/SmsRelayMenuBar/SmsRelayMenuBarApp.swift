@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import UserNotifications
 
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var aboutWindow: NSWindow?
     private var popoverGlobalClickMonitor: Any?
     private var popoverLocalClickMonitor: Any?
+    private var messageObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -30,16 +32,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "message.badge", accessibilityDescription: "Tang!")
+            updateStatusIcon(forMessageCount: appState.messageStore.messages.count)
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
+        messageObserver = appState.messageStore.$messages
+            .receive(on: RunLoop.main)
+            .sink { [weak self] messages in
+                self?.updateStatusIcon(forMessageCount: messages.count)
+            }
+
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 360, height: 420)
         popover.contentViewController = NSHostingController(rootView: MenuContentView(appState: appState))
         _ = NSApp.setActivationPolicy(.accessory)
+    }
+
+    private func updateStatusIcon(forMessageCount count: Int) {
+        guard let button = statusItem.button else {
+            return
+        }
+        let symbolName = count > 0 ? "message.badge" : "message"
+        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Tang!")
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
