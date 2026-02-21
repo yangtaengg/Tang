@@ -148,7 +148,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openAboutFromMenu() {
         let window = ensureAboutWindow()
-        _ = NSApp.setActivationPolicy(.regular)
         let app = NSRunningApplication.current
         app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
         NSApp.activate(ignoringOtherApps: true)

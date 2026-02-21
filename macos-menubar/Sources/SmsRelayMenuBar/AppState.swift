@@ -145,7 +145,6 @@ final class AppState: ObservableObject {
     func openPairDeviceWindow() {
         refreshPairingQR()
         let window = ensurePairDeviceWindow()
-        _ = NSApp.setActivationPolicy(.regular)
         let app = NSRunningApplication.current
         app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
         NSApp.activate(ignoringOtherApps: true)
@@ -219,7 +218,6 @@ final class AppState: ObservableObject {
             return
         }
 
-        _ = NSApp.setActivationPolicy(.regular)
         messageWindow.level = .normal
         let app = NSRunningApplication.current
         app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
