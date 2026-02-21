@@ -20,7 +20,11 @@ final class AppState: ObservableObject {
 
     let messageStore = MessageStore()
     private let server: WebSocketServer
+    private var relayClient: RelayBridgeClient? = nil
     private(set) var token: String
+    private var relayBaseUrl: String? = nil
+    private var relaySecret: String? = nil
+    private var relayAuthenticatedCount: Int = 0
     private var pendingReplySmsClientMsgId: String?
     private var pairDeviceWindow: NSWindow?
     private lazy var messageWindow: NSWindow = {
@@ -49,9 +53,18 @@ final class AppState: ObservableObject {
     private var fallbackGlobalClickMonitor: Any?
     private var fallbackLocalClickMonitor: Any?
     private let fallbackToastDuration: TimeInterval = 8
+    private var callRingtone: NSSound?
+    private var callRingtoneStopWorkItem: DispatchWorkItem?
+    private let callRingtoneMaxDuration: TimeInterval = 25
     private static let nonExpiringExpiresAtMs: Int64 = 253402300799000
 
     init() {
+        let env = ProcessInfo.processInfo.environment
+        let configuredRelayUrl = env["TANG_RELAY_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let configuredRelaySecret = env["TANG_RELAY_SECRET"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        relayBaseUrl = (configuredRelayUrl?.isEmpty == false) ? configuredRelayUrl : "ws://168.107.56.23:8765/ws"
+        relaySecret = (configuredRelaySecret?.isEmpty == false) ? configuredRelaySecret : nil
+
         let initialPort: UInt16 = 8765
         let existing = KeychainStore.loadToken()
         token = existing ?? TokenFactory.randomBase64Token()
@@ -120,7 +133,75 @@ final class AppState: ObservableObject {
             }
         }
 
+        if let relayBaseUrl {
+            let relay = RelayBridgeClient(config: .init(
+                relayBaseUrl: relayBaseUrl,
+                relaySecret: relaySecret,
+                token: token,
+                pairingCode: pairingCode
+            ))
+            relay.onServerStateChanged = { [weak self] state in
+                Task { @MainActor in
+                    self?.serverState = state
+                }
+            }
+            relay.onSmsMessage = { [weak self] message in
+                Task { @MainActor in
+                    self?.messageStore.append(message)
+                    self?.notify(message)
+                }
+            }
+            relay.onIncomingCall = { [weak self] call in
+                Task { @MainActor in
+                    self?.notifyIncomingCall(call)
+                }
+            }
+            relay.onReplyResult = { [weak self] _, success, reason in
+                Task { @MainActor in
+                    if success {
+                        self?.replyStatusText = "Reply sent"
+                    } else {
+                        self?.replyStatusText = reason ?? "Reply failed"
+                    }
+                }
+            }
+            relay.onReplySmsResult = { [weak self] clientMsgId, success, reason in
+                Task { @MainActor in
+                    if let clientMsgId,
+                       let pending = self?.pendingReplySmsClientMsgId,
+                       pending != clientMsgId {
+                        return
+                    }
+                    self?.pendingReplySmsClientMsgId = nil
+                    if success {
+                        self?.replyStatusText = "Success!"
+                    } else {
+                        self?.replyStatusText = reason ?? "SMS send failed"
+                    }
+                }
+            }
+            relay.onClientAuthenticated = { [weak self] device, appVersion in
+                Task { @MainActor in
+                    self?.pairedDeviceName = device
+                    self?.pairedAppVersion = appVersion
+                    self?.closePairingWindowIfOpen()
+                }
+            }
+            relay.onAuthenticatedClientCountChanged = { [weak self] count in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.relayAuthenticatedCount = count
+                    if count == 0 {
+                        self.pairedDeviceName = nil
+                        self.pairedAppVersion = nil
+                    }
+                }
+            }
+            relayClient = relay
+        }
+
         server.start()
+        relayClient?.start()
         refreshPairingQR()
     }
 
@@ -128,8 +209,10 @@ final class AppState: ObservableObject {
         token = TokenFactory.randomBase64Token()
         try? KeychainStore.saveToken(token)
         server.updateToken(token)
+        relayClient?.updateToken(token)
         pairingCode = Self.makePairingCode(from: token)
         server.updatePairingCode(pairingCode)
+        relayClient?.updatePairingCode(pairingCode)
         pairedDeviceName = nil
         pairedAppVersion = nil
         refreshPairingQR()
@@ -155,9 +238,15 @@ final class AppState: ObservableObject {
     func refreshPairingQR() {
         pairingHost = LocalNetworkInfo.defaultIPv4()
         pairingExpiresAt = Date(timeIntervalSince1970: TimeInterval(Self.nonExpiringExpiresAtMs) / 1000)
+        let pairingUrl: String
+        if let relayBaseUrl {
+            pairingUrl = RelayBridgeClient.relayUrlString(baseUrl: relayBaseUrl, room: pairingCode, secret: relaySecret)
+        } else {
+            pairingUrl = "ws://\(pairingHost):\(pairingPort)/ws"
+        }
         let payload = PairingPayload(
             version: 1,
-            url: "ws://\(pairingHost):\(pairingPort)/ws",
+            url: pairingUrl,
             pairingToken: token,
             expiresAtMs: Self.nonExpiringExpiresAtMs,
             deviceName: Host.current().localizedName ?? "Mac"
@@ -243,12 +332,22 @@ final class AppState: ObservableObject {
             return
         }
 
-        let sent = server.sendSmsReply(
-            replyKey: message.replyKey,
-            sourcePackage: message.sourcePackage,
-            conversationKey: message.conversationKey,
-            body: trimmed
-        )
+        let sent: Bool
+        if relayAuthenticatedCount > 0 {
+            sent = relayClient?.sendSmsReply(
+                replyKey: message.replyKey,
+                sourcePackage: message.sourcePackage,
+                conversationKey: message.conversationKey,
+                body: trimmed
+            ) ?? false
+        } else {
+            sent = server.sendSmsReply(
+                replyKey: message.replyKey,
+                sourcePackage: message.sourcePackage,
+                conversationKey: message.conversationKey,
+                body: trimmed
+            )
+        }
 
         if sent {
             replyStatusText = "Sending..."
@@ -267,14 +366,26 @@ final class AppState: ObservableObject {
         let clientMsgId = UUID().uuidString
         let timestampMs = Int64(Date().timeIntervalSince1970 * 1000)
         let destination = message.fromPhone ?? message.from
-        let sent = server.sendReplySms(
-            to: destination,
-            body: trimmed,
-            sourcePackage: message.sourcePackage,
-            conversationKey: message.conversationKey,
-            clientMsgId: clientMsgId,
-            timestampMs: timestampMs
-        )
+        let sent: Bool
+        if relayAuthenticatedCount > 0 {
+            sent = relayClient?.sendReplySms(
+                to: destination,
+                body: trimmed,
+                sourcePackage: message.sourcePackage,
+                conversationKey: message.conversationKey,
+                clientMsgId: clientMsgId,
+                timestampMs: timestampMs
+            ) ?? false
+        } else {
+            sent = server.sendReplySms(
+                to: destination,
+                body: trimmed,
+                sourcePackage: message.sourcePackage,
+                conversationKey: message.conversationKey,
+                clientMsgId: clientMsgId,
+                timestampMs: timestampMs
+            )
+        }
 
         if sent {
             pendingReplySmsClientMsgId = clientMsgId
@@ -318,14 +429,19 @@ final class AppState: ObservableObject {
     private func notifyIncomingCall(_ call: IncomingCallEvent) {
         let title = "Incoming Call"
         let body = call.displayLine
-        playAlertSound(.call)
+        startIncomingCallRingtone()
 
         guard Bundle.main.bundleURL.pathExtension == "app" else {
             showFallbackCallNotification(
                 title: title,
                 body: body,
                 onHangUp: { [weak self] in
-                    _ = self?.server.sendCallHangup()
+                    self?.stopIncomingCallRingtone()
+                    if self?.relayAuthenticatedCount ?? 0 > 0 {
+                        _ = self?.relayClient?.sendCallHangup()
+                    } else {
+                        _ = self?.server.sendCallHangup()
+                    }
                 }
             )
             return
@@ -365,6 +481,33 @@ final class AppState: ObservableObject {
                 return
             }
         }
+    }
+
+    private func startIncomingCallRingtone() {
+        stopIncomingCallRingtone()
+
+        let candidates = ["iphone_ringtone", "Submarine", "Funk", "Ping"]
+        for name in candidates {
+            if let sound = NSSound(named: name) {
+                sound.loops = true
+                sound.play()
+                callRingtone = sound
+                break
+            }
+        }
+
+        let stopWorkItem = DispatchWorkItem { [weak self] in
+            self?.stopIncomingCallRingtone()
+        }
+        callRingtoneStopWorkItem = stopWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + callRingtoneMaxDuration, execute: stopWorkItem)
+    }
+
+    private func stopIncomingCallRingtone() {
+        callRingtoneStopWorkItem?.cancel()
+        callRingtoneStopWorkItem = nil
+        callRingtone?.stop()
+        callRingtone = nil
     }
 
     private func playTrashEmptySound() {
@@ -493,6 +636,7 @@ final class AppState: ObservableObject {
             messageText: body,
             onHangUp: onHangUp,
             onClose: { [weak self] in
+                self?.stopIncomingCallRingtone()
                 self?.closeFallbackPanelIfActive(panel)
             }
         ))
@@ -514,6 +658,7 @@ final class AppState: ObservableObject {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
             guard let panel else { return }
+            self?.stopIncomingCallRingtone()
             self?.closeFallbackPanelIfActive(panel)
         }
     }

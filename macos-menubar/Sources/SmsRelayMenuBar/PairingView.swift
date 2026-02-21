@@ -33,7 +33,7 @@ struct PairingView: View {
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .textSelection(.enabled)
 
-                Text("Host is auto-detected from current Wi-Fi network.")
+                Text("Connection uses the configured relay endpoint, so same Wi-Fi is not required.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
