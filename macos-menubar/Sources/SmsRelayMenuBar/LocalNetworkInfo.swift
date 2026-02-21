@@ -5,6 +5,7 @@ import Darwin
 enum LocalNetworkInfo {
     static func defaultIPv4() -> String {
         var wifiAddress: String?
+        var wiredAddress: String?
         var privateAddress: String?
         var fallbackAddress: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
@@ -21,7 +22,7 @@ enum LocalNetworkInfo {
                 let isLoopback = (flags & IFF_LOOPBACK) == IFF_LOOPBACK
                 guard isUp, !isLoopback else { continue }
                 guard interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) else { continue }
-                if name.hasPrefix("utun") || name.hasPrefix("awdl") || name.hasPrefix("llw") {
+                if isIgnoredInterface(name) {
                     continue
                 }
 
@@ -36,9 +37,15 @@ enum LocalNetworkInfo {
                     NI_NUMERICHOST
                 )
                 let candidate = String(cString: host)
+                if isLinkLocalIPv4(candidate) {
+                    continue
+                }
                 if name == "en0" && isPrivateIPv4(candidate) {
                     wifiAddress = candidate
                     break
+                }
+                if name.hasPrefix("en") && isPrivateIPv4(candidate) && wiredAddress == nil {
+                    wiredAddress = candidate
                 }
                 if isPrivateIPv4(candidate), privateAddress == nil {
                     privateAddress = candidate
@@ -53,7 +60,21 @@ enum LocalNetworkInfo {
             freeifaddrs(ifaddr)
         }
 
-        return wifiAddress ?? privateAddress ?? fallbackAddress ?? "127.0.0.1"
+        return wifiAddress ?? wiredAddress ?? privateAddress ?? fallbackAddress ?? "127.0.0.1"
+    }
+
+    private static func isIgnoredInterface(_ name: String) -> Bool {
+        if name.hasPrefix("utun") || name.hasPrefix("awdl") || name.hasPrefix("llw") {
+            return true
+        }
+        if name.hasPrefix("bridge") || name.hasPrefix("vmnet") || name.hasPrefix("vboxnet") || name.hasPrefix("docker") {
+            return true
+        }
+        return false
+    }
+
+    private static func isLinkLocalIPv4(_ ip: String) -> Bool {
+        ip.hasPrefix("169.254.")
     }
 
     private static func isPrivateIPv4(_ ip: String) -> Bool {
