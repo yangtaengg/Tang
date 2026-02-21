@@ -24,8 +24,11 @@ object CallNotificationParser {
 
         val fromKnownDialer = knownDialerPackages.contains(sbn.packageName)
         val isCallCategory = category == Notification.CATEGORY_CALL
-        val looksLikeCall = isSystemCallLabel(title) || isSystemCallLabel(text) || isSystemCallLabel(subText)
-        if (!fromKnownDialer && !isCallCategory && !looksLikeCall) {
+        val looksIncomingCall = isIncomingCallLabel(title) || isIncomingCallLabel(text) || isIncomingCallLabel(subText)
+        if (!looksIncomingCall) {
+            return null
+        }
+        if (!fromKnownDialer && !isCallCategory) {
             return null
         }
 
@@ -35,8 +38,8 @@ object CallNotificationParser {
                 ?: extractPhoneCandidate(subText)
         )
 
-        val titleIsSystemLabel = isSystemCallLabel(title)
-        val textIsSystemLabel = isSystemCallLabel(text)
+        val titleIsSystemLabel = isIncomingCallLabel(title)
+        val textIsSystemLabel = isIncomingCallLabel(text)
         val name = when {
             title.isBlank() -> null
             normalizePhone(title) != null -> null
@@ -47,7 +50,7 @@ object CallNotificationParser {
         val from = number
             ?: if (titleIsSystemLabel) {
                 text.takeUnless { text.isBlank() || textIsSystemLabel }
-                    ?: subText.takeUnless { subText.isBlank() || isSystemCallLabel(subText) }
+                    ?: subText.takeUnless { subText.isBlank() || isIncomingCallLabel(subText) }
                     ?: "Unknown caller"
             } else {
                 title.ifBlank { text.ifBlank { "Unknown caller" } }
@@ -77,7 +80,7 @@ object CallNotificationParser {
         return if (normalized.count { it.isDigit() } >= 7) normalized else null
     }
 
-    private fun isSystemCallLabel(text: String): Boolean {
+    private fun isIncomingCallLabel(text: String): Boolean {
         val normalized = text.lowercase()
         return normalized.contains("incoming call") ||
             normalized.contains("수신 전화") ||
