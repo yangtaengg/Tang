@@ -33,11 +33,9 @@ struct PairingView: View {
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .textSelection(.enabled)
 
-                Text("Mac IP / Host")
+                Text("Host is auto-detected from current Wi-Fi network.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("192.168.0.10", text: $appState.pairingHost)
-                    .textFieldStyle(.roundedBorder)
             }
             .padding(10)
             .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))

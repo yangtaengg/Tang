@@ -26,6 +26,7 @@ object RelayWebSocketClient {
     private var socket: WebSocket? = null
     @Volatile
     private var authenticated = false
+    private val authStateListeners = LinkedHashSet<(Boolean) -> Unit>()
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private var reconnectFuture: ScheduledFuture<*>? = null
@@ -67,7 +68,7 @@ object RelayWebSocketClient {
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 attempt = 0
-                authenticated = false
+                updateAuthenticated(false)
                 Log.i(TAG, "WebSocket opened: ${payload.url}")
                 val auth = JSONObject()
                     .put("type", "auth")
@@ -83,12 +84,12 @@ object RelayWebSocketClient {
                 val type = message.optString("type")
                 when (type) {
                     "auth.ok" -> {
-                        authenticated = true
+                        updateAuthenticated(true)
                         Log.i(TAG, "Auth acknowledged by server")
                         flushQueue()
                     }
                     "auth.fail" -> {
-                        authenticated = false
+                        updateAuthenticated(false)
                         Log.w(TAG, "Auth rejected by server")
                         closeAndReset()
                     }
@@ -111,14 +112,14 @@ object RelayWebSocketClient {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.i(TAG, "WebSocket closed: $code / $reason")
-                authenticated = false
+                updateAuthenticated(false)
                 socket = null
                 scheduleReconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure: ${t.message}")
-                authenticated = false
+                updateAuthenticated(false)
                 socket = null
                 scheduleReconnect()
             }
@@ -133,6 +134,30 @@ object RelayWebSocketClient {
         smsQueue.clear()
         callQueue.clear()
         QuickReplyStore.clear()
+    }
+
+    @Synchronized
+    fun isAuthenticated(): Boolean = authenticated
+
+    @Synchronized
+    fun addAuthStateListener(listener: (Boolean) -> Unit) {
+        authStateListeners.add(listener)
+        listener(authenticated)
+    }
+
+    @Synchronized
+    fun removeAuthStateListener(listener: (Boolean) -> Unit) {
+        authStateListeners.remove(listener)
+    }
+
+    @Synchronized
+    private fun updateAuthenticated(newValue: Boolean) {
+        if (authenticated == newValue) {
+            return
+        }
+        authenticated = newValue
+        val listeners = authStateListeners.toList()
+        listeners.forEach { it(newValue) }
     }
 
     @Synchronized
@@ -408,6 +433,6 @@ object RelayWebSocketClient {
     private fun closeAndReset() {
         socket?.close(CLOSE_NORMAL, "reset")
         socket = null
-        authenticated = false
+        updateAuthenticated(false)
     }
 }

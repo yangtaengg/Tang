@@ -7,7 +7,7 @@ import UserNotifications
 @MainActor
 final class AppState: ObservableObject {
     @Published var serverState: String = "stopped"
-    @Published var pairingHost: String = LocalNetworkInfo.defaultIPv4()
+    @Published private(set) var pairingHost: String = LocalNetworkInfo.defaultIPv4()
     @Published var pairingPort: UInt16 = 8765
     @Published var pairingExpiresAt: Date = .distantFuture
     @Published private(set) var pairingCode: String = "000000"
@@ -153,6 +153,7 @@ final class AppState: ObservableObject {
     }
 
     func refreshPairingQR() {
+        pairingHost = LocalNetworkInfo.defaultIPv4()
         pairingExpiresAt = Date(timeIntervalSince1970: TimeInterval(Self.nonExpiringExpiresAtMs) / 1000)
         let payload = PairingPayload(
             version: 1,
@@ -179,9 +180,19 @@ final class AppState: ObservableObject {
 
     func deleteMessage(_ message: SmsMessage) {
         messageStore.remove(messageID: message.id)
+        playTrashEmptySound()
         if selectedMessage?.id == message.id {
             selectedMessage = nil
         }
+    }
+
+    func clearAllMessages() {
+        guard !messageStore.messages.isEmpty else {
+            return
+        }
+        messageStore.removeAll()
+        playTrashEmptySound()
+        selectedMessage = nil
     }
 
     func verificationCode(in message: SmsMessage) -> String? {
@@ -353,6 +364,19 @@ final class AppState: ObservableObject {
                 sound.play()
                 return
             }
+        }
+    }
+
+    private func playTrashEmptySound() {
+        let finderTrashPath = "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/finder/empty trash.aif"
+        let finderTrashUrl = URL(fileURLWithPath: finderTrashPath)
+        if let finderTrashSound = NSSound(contentsOf: finderTrashUrl, byReference: true) {
+            finderTrashSound.play()
+            return
+        }
+
+        if let fallback = NSSound(named: "Glass") {
+            fallback.play()
         }
     }
 

@@ -15,18 +15,10 @@
         android:text="@string/app_name"
         android:textAppearance="@style/TangTitleText" />
 
-    <TextView
-        android:id="@+id/policyText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/policy_summary"
-        android:textAppearance="@style/TangCaptionText" />
-
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:background="@color/tang_stroke" />
 
     <com.google.android.material.tabs.TabLayout

@@ -25,9 +25,12 @@ struct MenuContentView: View {
                 Text("Tang!")
                     .font(.headline)
                 Spacer()
-                Text(appState.serverState)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Button("Pop all") {
+                    appState.clearAllMessages()
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .disabled(messageStore.messages.isEmpty)
             }
 
             if let device = appState.pairedDeviceName {

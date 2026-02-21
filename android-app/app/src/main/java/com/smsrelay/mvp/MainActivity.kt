@@ -9,17 +9,23 @@ import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.smsrelay.mvp.databinding.ActivityMainBinding
+import java.net.URI
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var pairingStore: PairingStore
     private lateinit var onboardingPagerAdapter: OnboardingPagerAdapter
+    private val authStateListener: (Boolean) -> Unit = {
+        runOnUiThread { renderState() }
+    }
 
     private val requestCameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -68,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemInsets()
 
         pairingStore = PairingStore(this)
         RelayWebSocketClient.initialize(this)
@@ -116,11 +123,41 @@ class MainActivity : AppCompatActivity() {
         }.attach()
     }
 
+    private fun applySystemInsets() {
+        val root = binding.root
+        val baseLeft = root.paddingLeft
+        val baseTop = root.paddingTop
+        val baseRight = root.paddingRight
+        val baseBottom = root.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(
+                baseLeft + bars.left,
+                baseTop + bars.top,
+                baseRight + bars.right,
+                baseBottom + bars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
     override fun onResume() {
         super.onResume()
         renderState()
         PhoneStateCallMonitor.start(this)
         RelayWebSocketClient.connectIfNeeded()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        RelayWebSocketClient.addAuthStateListener(authStateListener)
+    }
+
+    override fun onStop() {
+        RelayWebSocketClient.removeAuthStateListener(authStateListener)
+        super.onStop()
     }
 
     private fun renderState() {
@@ -132,11 +169,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         val pairing = pairingStore.load()
+        val pairingConnected = pairing != null && RelayWebSocketClient.isAuthenticated()
         val pairingStatus: String
         val pairingDetails: String
         if (pairing == null) {
             pairingStatus = "Pairing: Not paired"
             pairingDetails = "Scan the QR shown by the macOS app."
+        } else if (pairingConnected) {
+            pairingStatus = "✓ Pairing: Token connected"
+            pairingDetails = "${pairing.deviceName}\n${pairing.url}"
         } else {
             pairingStatus = "Pairing: Token saved"
             pairingDetails = "${pairing.deviceName}\n${pairing.url}\n(Token saved does not guarantee WebSocket auth connected)"
@@ -166,7 +207,8 @@ class MainActivity : AppCompatActivity() {
                 batteryRequestEnabled = !excluded,
                 notificationAccessGranted = notificationAccess,
                 smsPermissionGranted = smsGranted,
-                batteryExcluded = excluded
+                batteryExcluded = excluded,
+                pairingConnected = pairingConnected
             )
         )
     }
@@ -192,7 +234,7 @@ class MainActivity : AppCompatActivity() {
             dialogView.findViewById<android.widget.EditText>(R.id.pinDigit6)
         )
 
-        hostInput.setText("10.0.2.2")
+        hostInput.setText(defaultManualPairHost())
         pinInputs.forEachIndexed { index, editText ->
             editText.filters = arrayOf(InputFilter.LengthFilter(1))
             editText.doAfterTextChanged { text ->
@@ -236,7 +278,7 @@ class MainActivity : AppCompatActivity() {
         val host = hostRaw.trim()
         val code = codeRaw.trim().replace(Regex("\\D"), "")
         if (host.isBlank()) {
-            Toast.makeText(this, "Host is required (emulator: 10.0.2.2)", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Mac host is required", Toast.LENGTH_LONG).show()
             return false
         }
         if (!code.matches(Regex("\\d{6}"))) {
@@ -257,6 +299,15 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Pair code saved. Connecting...", Toast.LENGTH_SHORT).show()
         renderState()
         return true
+    }
+
+    private fun defaultManualPairHost(): String {
+        val saved = pairingStore.load() ?: return ""
+        return try {
+            URI(saved.url).host?.trim().orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun openSamsungNotificationContentSettings() {

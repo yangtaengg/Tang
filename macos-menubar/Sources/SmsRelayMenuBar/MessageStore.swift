@@ -14,4 +14,8 @@ final class MessageStore: ObservableObject {
     func remove(messageID: String) {
         messages.removeAll { $0.id == messageID }
     }
+
+    func removeAll() {
+        messages.removeAll()
+    }
 }

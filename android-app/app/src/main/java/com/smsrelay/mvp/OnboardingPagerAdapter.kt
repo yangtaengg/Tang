@@ -17,7 +17,8 @@ data class OnboardingUiState(
     val batteryRequestEnabled: Boolean,
     val notificationAccessGranted: Boolean,
     val smsPermissionGranted: Boolean,
-    val batteryExcluded: Boolean
+    val batteryExcluded: Boolean,
+    val pairingConnected: Boolean
 )
 
 class OnboardingPagerAdapter(
@@ -40,7 +41,8 @@ class OnboardingPagerAdapter(
         batteryRequestEnabled = true,
         notificationAccessGranted = false,
         smsPermissionGranted = false,
-        batteryExcluded = false
+        batteryExcluded = false,
+        pairingConnected = false
     )
 
     fun updateState(newState: OnboardingUiState) {
@@ -99,7 +101,14 @@ class OnboardingPagerAdapter(
     }
 
     private fun bindPairingStep(holder: StepViewHolder) {
-        holder.view.findViewById<TextView>(R.id.pairingStatusText).text = state.pairingStatus
+        val statusText = holder.view.findViewById<TextView>(R.id.pairingStatusText)
+        statusText.text = state.pairingStatus
+        statusText.setTextColor(
+            ContextCompat.getColor(
+                holder.view.context,
+                if (state.pairingConnected) R.color.tang_success else R.color.tang_body
+            )
+        )
         holder.view.findViewById<TextView>(R.id.pairingDetailsText).text = state.pairingDetails
         holder.view.findViewById<Button>(R.id.scanQrButton).setOnClickListener { onScanQr() }
         holder.view.findViewById<Button>(R.id.manualPairButton).setOnClickListener { onManualPair() }
