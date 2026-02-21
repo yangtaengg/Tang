@@ -17,7 +17,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.smsrelay.mvp.databinding.ActivityMainBinding
-import java.net.URI
+import java.net.URLEncoder
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -224,7 +224,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showManualPairDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_manual_pair, null)
-        val hostInput = dialogView.findViewById<android.widget.EditText>(R.id.manualPairHostInput)
         val pinInputs = listOf(
             dialogView.findViewById<android.widget.EditText>(R.id.pinDigit1),
             dialogView.findViewById<android.widget.EditText>(R.id.pinDigit2),
@@ -234,7 +233,6 @@ class MainActivity : AppCompatActivity() {
             dialogView.findViewById<android.widget.EditText>(R.id.pinDigit6)
         )
 
-        hostInput.setText(defaultManualPairHost())
         pinInputs.forEachIndexed { index, editText ->
             editText.filters = arrayOf(InputFilter.LengthFilter(1))
             editText.doAfterTextChanged { text ->
@@ -264,7 +262,7 @@ class MainActivity : AppCompatActivity() {
         dialog.setOnShowListener {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val code = pinInputs.joinToString(separator = "") { it.text?.toString().orEmpty() }
-                val ok = pairWithCode(hostInput.text?.toString().orEmpty(), code)
+                val ok = pairWithCode(code)
                 if (ok) {
                     dialog.dismiss()
                 }
@@ -274,21 +272,22 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun pairWithCode(hostRaw: String, codeRaw: String): Boolean {
-        val host = hostRaw.trim()
+    private fun pairWithCode(codeRaw: String): Boolean {
         val code = codeRaw.trim().replace(Regex("\\D"), "")
-        if (host.isBlank()) {
-            Toast.makeText(this, "Mac host is required", Toast.LENGTH_LONG).show()
-            return false
-        }
         if (!code.matches(Regex("\\d{6}"))) {
             Toast.makeText(this, "Enter 6-digit code", Toast.LENGTH_LONG).show()
             return false
         }
 
+        val pairingUrl = buildManualPairUrl(code)
+        if (pairingUrl == null) {
+            Toast.makeText(this, "Invalid relay URL", Toast.LENGTH_LONG).show()
+            return false
+        }
+
         val payload = QrPayload(
             version = 1,
-            url = "ws://$host:8765/ws",
+            url = pairingUrl,
             pairingToken = code,
             expiresAtMs = Long.MAX_VALUE,
             deviceName = "Mac"
@@ -301,13 +300,14 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private fun defaultManualPairHost(): String {
-        val saved = pairingStore.load() ?: return ""
-        return try {
-            URI(saved.url).host?.trim().orEmpty()
-        } catch (_: Exception) {
-            ""
+    private fun buildManualPairUrl(roomCode: String): String? {
+        val relayBase = getString(R.string.manual_pair_relay_base).trim()
+        if (!(relayBase.startsWith("ws://") || relayBase.startsWith("wss://"))) {
+            return null
         }
+        val separator = if (relayBase.contains("?")) "&" else "?"
+        val encodedRoom = URLEncoder.encode(roomCode, Charsets.UTF_8.name())
+        return "$relayBase${separator}room=$encodedRoom"
     }
 
     private fun openSamsungNotificationContentSettings() {

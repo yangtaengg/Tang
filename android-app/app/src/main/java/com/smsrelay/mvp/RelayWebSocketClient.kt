@@ -30,10 +30,14 @@ object RelayWebSocketClient {
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private var reconnectFuture: ScheduledFuture<*>? = null
+    private var pingFuture: ScheduledFuture<*>? = null
     private var attempt = 0
+    private var lastPongAtMs = 0L
     private val smsQueue = ArrayDeque<RelaySmsEvent>()
     private val callQueue = ArrayDeque<RelayCallEvent>()
     private const val REPLY_SMS_RESULT_TTL_MS = 10 * 60 * 1000L
+    private const val PING_INTERVAL_MS = 20_000L
+    private const val PONG_TIMEOUT_MS = 60_000L
     private val recentReplySmsResults = LinkedHashMap<String, CachedReplySmsResult>(128, 0.75f, true)
 
     private data class CachedReplySmsResult(
@@ -85,11 +89,14 @@ object RelayWebSocketClient {
                 when (type) {
                     "auth.ok" -> {
                         updateAuthenticated(true)
+                        lastPongAtMs = System.currentTimeMillis()
+                        startPingLoop()
                         Log.i(TAG, "Auth acknowledged by server")
                         flushQueue()
                     }
                     "auth.fail" -> {
                         updateAuthenticated(false)
+                        stopPingLoop()
                         Log.w(TAG, "Auth rejected by server")
                         closeAndReset()
                     }
@@ -102,7 +109,9 @@ object RelayWebSocketClient {
                     "call.hangup" -> {
                         handleCallHangUpCommand()
                     }
-                    "pong" -> Unit
+                    "pong" -> {
+                        lastPongAtMs = System.currentTimeMillis()
+                    }
                 }
             }
 
@@ -113,6 +122,7 @@ object RelayWebSocketClient {
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.i(TAG, "WebSocket closed: $code / $reason")
                 updateAuthenticated(false)
+                stopPingLoop()
                 socket = null
                 scheduleReconnect()
             }
@@ -120,6 +130,7 @@ object RelayWebSocketClient {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure: ${t.message}")
                 updateAuthenticated(false)
+                stopPingLoop()
                 socket = null
                 scheduleReconnect()
             }
@@ -130,6 +141,7 @@ object RelayWebSocketClient {
     fun clearConnection() {
         reconnectFuture?.cancel(false)
         reconnectFuture = null
+        stopPingLoop()
         closeAndReset()
         smsQueue.clear()
         callQueue.clear()
@@ -430,7 +442,49 @@ object RelayWebSocketClient {
     }
 
     @Synchronized
+    private fun startPingLoop() {
+        if (pingFuture?.isDone == false) {
+            return
+        }
+        pingFuture = scheduler.scheduleAtFixedRate(
+            { sendPingIfNeeded() },
+            PING_INTERVAL_MS,
+            PING_INTERVAL_MS,
+            TimeUnit.MILLISECONDS
+        )
+    }
+
+    @Synchronized
+    private fun stopPingLoop() {
+        pingFuture?.cancel(false)
+        pingFuture = null
+    }
+
+    @Synchronized
+    private fun sendPingIfNeeded() {
+        val webSocket = socket ?: return
+        if (!authenticated) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (lastPongAtMs > 0 && now - lastPongAtMs > PONG_TIMEOUT_MS) {
+            Log.w(TAG, "Ping timeout; resetting websocket connection")
+            stopPingLoop()
+            webSocket.cancel()
+            socket = null
+            updateAuthenticated(false)
+            scheduleReconnect()
+            return
+        }
+        val pingPayload = JSONObject()
+            .put("type", "ping")
+            .put("ts", now)
+        webSocket.send(pingPayload.toString())
+    }
+
+    @Synchronized
     private fun closeAndReset() {
+        stopPingLoop()
         socket?.close(CLOSE_NORMAL, "reset")
         socket = null
         updateAuthenticated(false)
