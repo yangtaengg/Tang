@@ -10,13 +10,34 @@
     <string name="open_battery_settings">Battery Optimization Guidance</string>
     <string name="request_battery_exclusion">Allow Battery Optimization Exclusion</string>
     <string name="request_sms_permission">Grant SMS Send Permission</string>
-    <string name="manual_pair_host_hint">192.168.0.10</string>
     <string name="manual_pair_code_hint">6-digit code</string>
-    <string name="manual_pair_connect">Pair via 6-digit Code</string>
+    <string name="manual_pair_connect">Pair via 6-digit PIN</string>
     <string name="manual_pair_dialog_title">Connect with 6-digit PIN</string>
-    <string name="manual_pair_dialog_subtitle">Enter Mac host and the PIN shown in Tang! Settings.</string>
-    <string name="manual_pair_host_label">Mac host</string>
+    <string name="manual_pair_screen_title">Enter 6-digit PIN</string>
+    <string name="manual_pair_dialog_subtitle">Enter the 6-digit PIN shown in the macOS app. The Mac is auto-detected on current Wi-Fi.</string>
+    <string name="manual_pair_host_label">Mac address</string>
+    <string name="manual_pair_host_hint">e.g. 192.168.0.12 or ws://192.168.0.12:8765/ws</string>
+    <string name="manual_pair_host_required">Could not find Mac on current Wi-Fi. Enter Mac IP/host manually.</string>
     <string name="manual_pair_code_label">6-digit PIN</string>
     <string name="manual_pair_cancel">Cancel</string>
+    <string name="manual_pair_back">Back</string>
     <string name="manual_pair_confirm">Connect</string>
+    <string name="manual_pair_finding_mac">Finding Mac...</string>
+
+    <string name="connected_status">Connected</string>
+    <string name="connected_to_mac">Connected to Mac</string>
+    <string name="disconnect">Disconnect</string>
+
+    <string name="qr_scan_subtitle">Connect to your Mac</string>
+    <string name="qr_scan_not_connected">Not connected</string>
+    <string name="qr_scan_instructions">Scan the QR code or enter PIN from the macOS app</string>
+    <string name="qr_scan_saved_waiting">Pair token for %s is saved, waiting for connection</string>
+    <string name="qr_scan_connected">Connected</string>
+    <string name="qr_scan_connected_details">You are connected to %s</string>
+    <string name="camera_permission_required">Camera permission required for QR scanning</string>
+    <string name="camera_permission_denied">Camera permission was denied. This app cannot function properly without camera access for QR pairing. Please grant the permission to continue.</string>
+    <string name="permission_retry">Retry</string>
+    <string name="permission_exit">Exit</string>
+    <string name="phone_state_permission_required">Phone state permission is required for call alerts</string>
+    <string name="phone_state_permission_denied">Phone state permission was denied. This app cannot show incoming call alerts without this permission. Please grant the permission to continue.</string>
 </resources>

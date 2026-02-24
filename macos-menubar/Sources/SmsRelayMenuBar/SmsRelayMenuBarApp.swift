@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import ServiceManagement
 import SwiftUI
 import UserNotifications
 
@@ -26,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
+        NSApp.applicationIconImage = appIconImage()
+        enableLaunchAtLoginIfPossible()
 
         if Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -50,12 +53,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = NSApp.setActivationPolicy(.accessory)
     }
 
+    private func enableLaunchAtLoginIfPossible() {
+        guard Bundle.main.bundleURL.pathExtension == "app" else {
+            return
+        }
+        do {
+            try SMAppService.mainApp.register()
+        } catch {
+            NSLog("[Tang] launch-at-login registration failed: \(error.localizedDescription)")
+        }
+    }
+
     private func updateStatusIcon(forMessageCount count: Int) {
         guard let button = statusItem.button else {
             return
         }
         let symbolName = count > 0 ? "message.badge" : "message"
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Tang!")
+    }
+
+    private func appIconImage() -> NSImage {
+        return speechBubbleIconImage(size: NSSize(width: 512, height: 512))
+    }
+
+    private func speechBubbleIconImage(size: NSSize) -> NSImage {
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        let rect = NSRect(origin: .zero, size: size)
+        let width = size.width
+        let radius = min(size.width, size.height) * 0.22
+        let background = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
+        let gradient = NSGradient(
+            colors: [
+                NSColor(calibratedRed: 0.43, green: 0.64, blue: 1.0, alpha: 1.0),
+                NSColor(calibratedRed: 0.18, green: 0.42, blue: 1.0, alpha: 1.0),
+                NSColor(calibratedRed: 0.14, green: 0.34, blue: 0.84, alpha: 1.0)
+            ]
+        )
+        gradient?.draw(in: background, angle: -45)
+
+        NSColor.white.setFill()
+        let bubbleRect = NSRect(
+            x: width * 0.19,
+            y: width * 0.24,
+            width: width * 0.62,
+            height: width * 0.56
+        )
+        let bubble = NSBezierPath(
+            roundedRect: bubbleRect,
+            xRadius: width * 0.10,
+            yRadius: width * 0.10
+        )
+        bubble.fill()
+
+        let tail = NSBezierPath()
+        tail.move(to: NSPoint(x: width * 0.40, y: width * 0.24))
+        tail.line(to: NSPoint(x: width * 0.30, y: width * 0.10))
+        tail.line(to: NSPoint(x: width * 0.50, y: width * 0.24))
+        tail.close()
+        tail.fill()
+
+        NSColor(calibratedRed: 0.18, green: 0.42, blue: 1.0, alpha: 0.34).setFill()
+        let line1 = NSBezierPath(roundedRect: NSRect(x: width * 0.30, y: width * 0.54, width: width * 0.36, height: width * 0.05), xRadius: width * 0.025, yRadius: width * 0.025)
+        line1.fill()
+        let line2 = NSBezierPath(roundedRect: NSRect(x: width * 0.30, y: width * 0.44, width: width * 0.26, height: width * 0.05), xRadius: width * 0.025, yRadius: width * 0.025)
+        line2.fill()
+
+        image.unlockFocus()
+        return image
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {

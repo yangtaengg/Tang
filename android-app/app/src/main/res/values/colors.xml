@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FF7E7E</color>
+    <color name="ic_launcher_background">#2F6BFF</color>
     <color name="tang_bg">#F4F4F7</color>
     <color name="tang_card">#FFFDFDFE</color>
     <color name="tang_stroke">#E0E2E8</color>

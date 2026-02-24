@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tang_bg"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:weightSum="4">
+
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.Tang.InsetPanel"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="3"
+        android:clipToOutline="true"
+        app:cardCornerRadius="20dp">
+
+        <com.journeyapps.barcodescanner.DecoratedBarcodeView
+            android:id="@+id/qrScannerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/qrScanStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/qr_scan_not_connected"
+            android:textAppearance="@style/TangBodyText"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/qrScanDetailsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:text="@string/qr_scan_instructions"
+            android:textAppearance="@style/TangCaptionText" />
+
+        <Button
+            android:id="@+id/manualPairButton"
+            style="@style/Widget.Tang.ButtonSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/manual_pair_connect" />
+    </LinearLayout>
+
+</LinearLayout>

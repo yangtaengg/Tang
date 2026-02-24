@@ -2,6 +2,8 @@ package com.smsrelay.mvp
 
 import android.app.Notification
 import android.os.Build
+import android.os.Bundle
+import android.os.Parcelable
 import android.service.notification.StatusBarNotification
 import android.telephony.PhoneNumberUtils
 import java.util.UUID
@@ -75,11 +77,11 @@ object SmsNotificationParser {
         val timestamp: Long
     )
 
-    private fun parseMessagingStyle(extras: android.os.Bundle): ParsedMessaging? {
+    private fun parseMessagingStyle(extras: Bundle): ParsedMessaging? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return null
         }
-        val parcelables = extras.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return null
+        val parcelables = getMessagingBundleArray(extras) ?: return null
         val messages = Notification.MessagingStyle.Message.getMessagesFromBundleArray(parcelables)
         val latest = messages
             .asReversed()
@@ -89,7 +91,6 @@ object SmsNotificationParser {
             }
             ?: return null
         val sender = latest.senderPerson?.name?.toString()
-            ?: latest.sender?.toString()
             ?: "Unknown"
         val senderPhone = normalizePhone(
             latest.senderPerson?.uri?.removePrefix("tel:")
@@ -119,7 +120,7 @@ object SmsNotificationParser {
         return if (normalized.count { it.isDigit() } >= 7) normalized else null
     }
 
-    private fun extractFallbackBody(extras: android.os.Bundle): String {
+    private fun extractFallbackBody(extras: Bundle): String {
         val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
             ?.mapNotNull { it?.toString()?.trim() }
             ?.firstOrNull {
@@ -139,6 +140,15 @@ object SmsNotificationParser {
                 it.isNotBlank() && !isHiddenSensitiveContent(it) && !isGenericOpenMessagesPrompt(it)
             }
             .orEmpty()
+    }
+
+    private fun getMessagingBundleArray(extras: Bundle): Array<Parcelable>? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            extras.getParcelableArray(Notification.EXTRA_MESSAGES, Parcelable::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+        }
     }
 
     private fun isHiddenSensitiveContent(text: String): Boolean {

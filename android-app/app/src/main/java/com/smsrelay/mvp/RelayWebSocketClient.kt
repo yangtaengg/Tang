@@ -1,6 +1,7 @@
 package com.smsrelay.mvp
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.os.Build
 import android.util.Log
 import okhttp3.OkHttpClient
@@ -11,6 +12,12 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
 import java.util.ArrayDeque
+import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.URI
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -19,6 +26,8 @@ import kotlin.math.min
 object RelayWebSocketClient {
     private const val TAG = "RelayWebSocketClient"
     private const val CLOSE_NORMAL = 1000
+    private const val SUBNET_SCAN_PORT_TIMEOUT_MS = 120
+    private const val DISCOVERY_RETRY_MIN_INTERVAL_MS = 8_000L
 
     @Volatile
     private var appContext: Context? = null
@@ -30,10 +39,13 @@ object RelayWebSocketClient {
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private var reconnectFuture: ScheduledFuture<*>? = null
+    private var heartbeatFuture: ScheduledFuture<*>? = null
     private var attempt = 0
+    private var lastDiscoveryAttemptMs = 0L
     private val smsQueue = ArrayDeque<RelaySmsEvent>()
     private val callQueue = ArrayDeque<RelayCallEvent>()
     private const val REPLY_SMS_RESULT_TTL_MS = 10 * 60 * 1000L
+    private const val HEARTBEAT_INTERVAL_SECONDS = 20L
     private val recentReplySmsResults = LinkedHashMap<String, CachedReplySmsResult>(128, 0.75f, true)
 
     private data class CachedReplySmsResult(
@@ -85,11 +97,13 @@ object RelayWebSocketClient {
                 when (type) {
                     "auth.ok" -> {
                         updateAuthenticated(true)
+                        startHeartbeatLocked()
                         Log.i(TAG, "Auth acknowledged by server")
                         flushQueue()
                     }
                     "auth.fail" -> {
                         updateAuthenticated(false)
+                        stopHeartbeatLocked()
                         Log.w(TAG, "Auth rejected by server")
                         closeAndReset()
                     }
@@ -113,6 +127,7 @@ object RelayWebSocketClient {
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.i(TAG, "WebSocket closed: $code / $reason")
                 updateAuthenticated(false)
+                stopHeartbeatLocked()
                 socket = null
                 scheduleReconnect()
             }
@@ -120,6 +135,7 @@ object RelayWebSocketClient {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(TAG, "WebSocket failure: ${t.message}")
                 updateAuthenticated(false)
+                stopHeartbeatLocked()
                 socket = null
                 scheduleReconnect()
             }
@@ -130,6 +146,7 @@ object RelayWebSocketClient {
     fun clearConnection() {
         reconnectFuture?.cancel(false)
         reconnectFuture = null
+        stopHeartbeatLocked()
         closeAndReset()
         smsQueue.clear()
         callQueue.clear()
@@ -423,16 +440,148 @@ object RelayWebSocketClient {
         attempt += 1
 
         reconnectFuture = scheduler.schedule(
-            { connectIfNeeded() },
+            {
+                recoverPairingUrlOnCurrentWifiIfNeeded()
+                connectIfNeeded()
+            },
             delayMs,
             TimeUnit.MILLISECONDS
         )
     }
 
     @Synchronized
+    private fun recoverPairingUrlOnCurrentWifiIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (now - lastDiscoveryAttemptMs < DISCOVERY_RETRY_MIN_INTERVAL_MS) {
+            return
+        }
+        lastDiscoveryAttemptMs = now
+
+        val context = appContext ?: return
+        val store = PairingStore(context)
+        val payload = store.load() ?: return
+        val uri = runCatching { URI(payload.url) }.getOrNull() ?: return
+        val host = uri.host ?: return
+        val port = if (uri.port > 0) uri.port else if (uri.scheme == "wss") 443 else 80
+
+        if (isPortOpen(host, port, SUBNET_SCAN_PORT_TIMEOUT_MS)) {
+            return
+        }
+
+        val discovered = discoverHostOnWifiSubnet(context, port) ?: return
+        if (discovered == host) {
+            return
+        }
+
+        val path = if (uri.path.isNullOrBlank() || uri.path == "/") "/ws" else uri.path
+        val updatedUrl = URI(uri.scheme ?: "ws", uri.userInfo, discovered, port, path, uri.query, uri.fragment).toString()
+        store.save(payload.copy(url = updatedUrl))
+        Log.i(TAG, "Recovered pairing host on current Wi-Fi: $host -> $discovered:$port")
+    }
+
+    private fun discoverHostOnWifiSubnet(context: Context, port: Int): String? {
+        val localIp = currentWifiIpv4(context) ?: return null
+        val prefix = localIp.substringBeforeLast('.', "")
+        if (prefix.isBlank()) {
+            return null
+        }
+        val selfLast = localIp.substringAfterLast('.', "").toIntOrNull()
+
+        val pool = Executors.newFixedThreadPool(24)
+        val completion = ExecutorCompletionService<String?>(pool)
+        var submitted = 0
+
+        try {
+            for (last in 1..254) {
+                if (last == selfLast) {
+                    continue
+                }
+                val host = "$prefix.$last"
+                completion.submit(Callable {
+                    if (isPortOpen(host, port, SUBNET_SCAN_PORT_TIMEOUT_MS)) host else null
+                })
+                submitted++
+            }
+
+            repeat(submitted) {
+                val found = completion.take().get()
+                if (!found.isNullOrBlank()) {
+                    return found
+                }
+            }
+            return null
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    private fun currentWifiIpv4(context: Context): String? {
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return null
+        val activeNetwork = connectivityManager.activeNetwork ?: return null
+        val linkProperties = connectivityManager.getLinkProperties(activeNetwork) ?: return null
+        return linkProperties.linkAddresses
+            .mapNotNull { it.address }
+            .firstOrNull { address ->
+                address is Inet4Address &&
+                    !address.isLoopbackAddress &&
+                    !address.isLinkLocalAddress
+            }
+            ?.hostAddress
+    }
+
+    private fun isPortOpen(host: String, port: Int, timeoutMs: Int): Boolean {
+        return runCatching {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), timeoutMs)
+            }
+            true
+        }.getOrDefault(false)
+    }
+
+    @Synchronized
     private fun closeAndReset() {
+        stopHeartbeatLocked()
         socket?.close(CLOSE_NORMAL, "reset")
         socket = null
         updateAuthenticated(false)
+    }
+
+    @Synchronized
+    private fun startHeartbeatLocked() {
+        if (heartbeatFuture?.isDone == false) {
+            return
+        }
+        heartbeatFuture = scheduler.scheduleAtFixedRate(
+            { sendHeartbeatTick() },
+            HEARTBEAT_INTERVAL_SECONDS,
+            HEARTBEAT_INTERVAL_SECONDS,
+            TimeUnit.SECONDS
+        )
+    }
+
+    @Synchronized
+    private fun stopHeartbeatLocked() {
+        heartbeatFuture?.cancel(false)
+        heartbeatFuture = null
+    }
+
+    @Synchronized
+    private fun sendHeartbeatTick() {
+        val webSocket = socket ?: return
+        if (!authenticated) {
+            return
+        }
+        val sent = webSocket.send(
+            JSONObject()
+                .put("type", "ping")
+                .put("timestamp", System.currentTimeMillis())
+                .toString()
+        )
+        if (!sent) {
+            updateAuthenticated(false)
+            stopHeartbeatLocked()
+            socket = null
+            scheduleReconnect()
+        }
     }
 }

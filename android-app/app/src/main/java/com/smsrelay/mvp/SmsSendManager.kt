@@ -52,7 +52,8 @@ object SmsSendManager {
             return Result.failure(IllegalArgumentException("message body empty"))
         }
 
-        val smsManager = SmsManager.getDefault()
+        val smsManager = context.getSystemService(SmsManager::class.java)
+            ?: return Result.failure(IllegalStateException("sms service unavailable"))
         val parts = smsManager.divideMessage(text)
         if (parts.isEmpty()) {
             return Result.failure(IllegalStateException("message split failed"))

@@ -1,13 +1,18 @@
+@file:Suppress("DEPRECATION")
+
 package com.smsrelay.mvp
 
 import android.content.Context
+import android.os.Build
 import android.telephony.PhoneStateListener
+import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import java.util.UUID
 
 object PhoneStateCallMonitor {
     private var telephonyManager: TelephonyManager? = null
     private var listener: PhoneStateListener? = null
+    private var callback: TelephonyCallback? = null
     private var lastState: Int = TelephonyManager.CALL_STATE_IDLE
 
     @Synchronized
@@ -22,21 +27,37 @@ object PhoneStateCallMonitor {
         }
         telephonyManager = manager
 
-        @Suppress("DEPRECATION")
-        val callStateListener = object : PhoneStateListener() {
-            override fun onCallStateChanged(state: Int, incomingNumber: String?) {
-                handleCallStateChange(state, incomingNumber)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val callStateCallback = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                override fun onCallStateChanged(state: Int) {
+                    handleCallStateChange(state, incomingNumber = null)
+                }
             }
+            callback = callStateCallback
+            manager.registerTelephonyCallback(context.mainExecutor, callStateCallback)
+            listener = null
+        } else {
+            @Suppress("DEPRECATION")
+            val callStateListener = object : PhoneStateListener() {
+                @Suppress("OVERRIDE_DEPRECATION")
+                override fun onCallStateChanged(state: Int, incomingNumber: String?) {
+                    handleCallStateChange(state, incomingNumber)
+                }
+            }
+            listener = callStateListener
+            @Suppress("DEPRECATION")
+            manager.listen(callStateListener, PhoneStateListener.LISTEN_CALL_STATE)
+            callback = null
         }
-        listener = callStateListener
-        @Suppress("DEPRECATION")
-        manager.listen(callStateListener, PhoneStateListener.LISTEN_CALL_STATE)
     }
 
     @Synchronized
     fun stop() {
         val manager = telephonyManager ?: return
-        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            callback?.let { manager.unregisterTelephonyCallback(it) }
+            callback = null
+        }
         val currentListener = listener
         if (currentListener != null) {
             @Suppress("DEPRECATION")

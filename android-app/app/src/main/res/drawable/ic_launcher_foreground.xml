@@ -3,62 +3,15 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-  <group
-      android:scaleX="0.21"
-      android:scaleY="0.21"
-      android:translateX="0"
-      android:translateY="0">
-    <!-- Elegant T monogram with subtle curves - represents Tang! and messaging -->
-    <!-- Horizontal bar with slight curve for organic feel -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M 140,180
-             Q 256,165 372,180
-             L 372,200
-             Q 256,185 140,200
-             Z" />
-
-    <!-- Vertical stem with tapered design -->
+        android:pathData="M31,29h46c9.39,0 17,7.61 17,17v19c0,9.39 -7.61,17 -17,17H52L35.5,94.2c-2.13,1.58 -5.15,0.06 -5.15,-2.53V82H31c-9.39,0 -17,-7.61 -17,-17V46c0,-9.39 7.61,-17 17,-17z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M 236,180
-             L 236,340
-             Q 236,360 256,360
-             Q 276,360 276,340
-             L 276,180
-             L 288,180
-             L 288,345
-             Q 288,375 256,375
-             Q 224,375 224,345
-             L 224,180
-             Z" />
-
-    <!-- Subtle messaging wave accent - soft, elegant -->
+        android:fillColor="#2F6BFF"
+        android:fillAlpha="0.34"
+        android:pathData="M38,49h32a3.5,3.5 0,1 1,0 7H38a3.5,3.5 0,1 1,0 -7z" />
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="8"
-        android:strokeLineCap="round"
-        android:fillAlpha="0"
-        android:pathData="M 156,340
-             Q 180,320 200,340" />
-
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
-        android:fillAlpha="0"
-        android:pathData="M 168,352
-             Q 180,340 192,352" />
-
-    <!-- Small accent dot - premium detail -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.5"
-        android:pathData="M 350,170
-             A 8,8 0 0 1 358,178
-             A 8,8 0 0 1 350,186
-             A 8,8 0 0 1 342,178
-             A 8,8 0 0 1 350,170
-             Z"/>
-  </group>
+        android:fillColor="#2F6BFF"
+        android:fillAlpha="0.34"
+        android:pathData="M38,61h24a3.5,3.5 0,1 1,0 7H38a3.5,3.5 0,1 1,0 -7z" />
 </vector>

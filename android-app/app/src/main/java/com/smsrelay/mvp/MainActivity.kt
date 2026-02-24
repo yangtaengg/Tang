@@ -1,48 +1,77 @@
 package com.smsrelay.mvp
+
 import android.Manifest
 import android.content.Intent
-import android.os.Bundle
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
-import android.text.InputFilter
-import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.widget.doAfterTextChanged
-import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
+import com.google.android.material.tabs.TabLayoutMediator
+import com.journeyapps.barcodescanner.BarcodeCallback
+import com.journeyapps.barcodescanner.BarcodeResult
+import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import com.smsrelay.mvp.databinding.ActivityMainBinding
-import java.net.URI
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var pairingStore: PairingStore
     private lateinit var onboardingPagerAdapter: OnboardingPagerAdapter
     private val authStateListener: (Boolean) -> Unit = {
-        runOnUiThread { renderState() }
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                return@runOnUiThread
+            }
+            renderState()
+            checkConnectionStateAndShowQrScanner()
+        }
     }
 
-    private val requestCameraPermission =
+    private var embeddedScannerView: DecoratedBarcodeView? = null
+    private val qrScanCallback = BarcodeCallback { result: BarcodeResult? ->
+        val content = result?.text?.trim().orEmpty()
+        if (content.isEmpty()) {
+            armSingleQrScan()
+            return@BarcodeCallback
+        }
+        handleScannedQr(content)
+    }
+
+    private val requestCameraPermission: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                launchQrScanner()
+                startEmbeddedScanner()
             } else {
-                Toast.makeText(this, "Camera permission is required for QR pairing.", Toast.LENGTH_LONG).show()
+                showPermissionDeniedDialog(
+                    title = getString(R.string.camera_permission_required),
+                    message = getString(R.string.camera_permission_denied),
+                    onRetry = { triggerCameraPermissionRequest() },
+                    onExit = { finish() }
+                )
             }
         }
 
-    private val requestPhoneStatePermission =
+    private val requestPhoneStatePermission: ActivityResultLauncher<String> =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 PhoneStateCallMonitor.start(this)
                 Toast.makeText(this, "Incoming call alerts enabled.", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Phone permission denied. Call alerts may be limited.", Toast.LENGTH_LONG).show()
+                showPermissionDeniedDialog(
+                    title = getString(R.string.phone_state_permission_required),
+                    message = getString(R.string.phone_state_permission_denied),
+                    onRetry = { triggerPhoneStatePermissionRequest() },
+                    onExit = { finish() }
+                )
             }
         }
 
@@ -51,13 +80,17 @@ class MainActivity : AppCompatActivity() {
             if (granted) {
                 Toast.makeText(this, "SMS sending permission granted.", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "SMS sending denied. Mac-triggered SMS send will be blocked.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    "SMS sending denied. Mac-triggered SMS send will be blocked.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
             renderState()
         }
 
-    private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
-        val content = result.contents ?: return@registerForActivityResult
+    private fun handleScannedQr(content: String) {
+        pauseEmbeddedScanner()
         val parsed = pairingStore.parseQrJson(content)
         parsed.onSuccess { payload ->
             pairingStore.save(payload)
@@ -65,10 +98,15 @@ class MainActivity : AppCompatActivity() {
             RelayWebSocketClient.connectIfNeeded()
             Toast.makeText(this, "Paired with ${payload.deviceName}", Toast.LENGTH_SHORT).show()
             renderState()
+            checkConnectionStateAndShowQrScanner()
         }.onFailure { error ->
             Toast.makeText(this, "Invalid QR: ${error.message}", Toast.LENGTH_LONG).show()
+            armSingleQrScan()
         }
     }
+
+    private var showingQrScanner = false
+    private var showingConnectedScreen = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,10 +129,10 @@ class MainActivity : AppCompatActivity() {
                 requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
             },
             onScanQr = {
-                requestCameraPermission.launch(Manifest.permission.CAMERA)
+                triggerCameraPermissionRequest()
             },
             onManualPair = {
-                showManualPairDialog()
+                openManualPairScreen()
             },
             onClearPairing = {
                 pairingStore.clear()
@@ -112,7 +150,7 @@ class MainActivity : AppCompatActivity() {
                 BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
             }
         )
-        binding.stepPager.setAdapter(onboardingPagerAdapter)
+        binding.stepPager.adapter = onboardingPagerAdapter
         TabLayoutMediator(binding.stepTabs, binding.stepPager) { tab, position ->
             tab.text = when (position) {
                 0 -> "Alerts"
@@ -123,8 +161,7 @@ class MainActivity : AppCompatActivity() {
         }.attach()
     }
 
-    private fun applySystemInsets() {
-        val root = binding.root
+    private fun applySystemInsets(root: View = binding.root) {
         val baseLeft = root.paddingLeft
         val baseTop = root.paddingTop
         val baseRight = root.paddingRight
@@ -148,6 +185,12 @@ class MainActivity : AppCompatActivity() {
         renderState()
         PhoneStateCallMonitor.start(this)
         RelayWebSocketClient.connectIfNeeded()
+        checkConnectionStateAndShowQrScanner()
+    }
+
+    override fun onPause() {
+        pauseEmbeddedScanner()
+        super.onPause()
     }
 
     override fun onStart() {
@@ -177,10 +220,10 @@ class MainActivity : AppCompatActivity() {
             pairingDetails = "Scan the QR shown by the macOS app."
         } else if (pairingConnected) {
             pairingStatus = "✓ Pairing: Token connected"
-            pairingDetails = "${pairing.deviceName}\n${pairing.url}"
+            pairingDetails = pairing.deviceName
         } else {
             pairingStatus = "Pairing: Token saved"
-            pairingDetails = "${pairing.deviceName}\n${pairing.url}\n(Token saved does not guarantee WebSocket auth connected)"
+            pairingDetails = "${pairing.deviceName}\n(Token saved does not guarantee WebSocket auth connected)"
         }
 
         val excluded = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
@@ -213,101 +256,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun launchQrScanner() {
-        val options = ScanOptions()
-        options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-        options.setPrompt("Scan pairing QR from macOS app")
-        options.setBeepEnabled(false)
-        options.setOrientationLocked(true)
-        scanLauncher.launch(options)
-    }
-
-    private fun showManualPairDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_manual_pair, null)
-        val hostInput = dialogView.findViewById<android.widget.EditText>(R.id.manualPairHostInput)
-        val pinInputs = listOf(
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit1),
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit2),
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit3),
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit4),
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit5),
-            dialogView.findViewById<android.widget.EditText>(R.id.pinDigit6)
-        )
-
-        hostInput.setText(defaultManualPairHost())
-        pinInputs.forEachIndexed { index, editText ->
-            editText.filters = arrayOf(InputFilter.LengthFilter(1))
-            editText.doAfterTextChanged { text ->
-                if (text?.length == 1 && index < pinInputs.lastIndex) {
-                    pinInputs[index + 1].requestFocus()
-                }
-            }
-            editText.setOnKeyListener { _, keyCode, event ->
-                if (keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN && editText.text.isEmpty() && index > 0) {
-                    pinInputs[index - 1].requestFocus()
-                    pinInputs[index - 1].setSelection(pinInputs[index - 1].text.length)
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-        pinInputs.first().requestFocus()
-
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(getString(R.string.manual_pair_dialog_title))
-            .setView(dialogView)
-            .setNegativeButton(getString(R.string.manual_pair_cancel), null)
-            .setPositiveButton(getString(R.string.manual_pair_confirm), null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val code = pinInputs.joinToString(separator = "") { it.text?.toString().orEmpty() }
-                val ok = pairWithCode(hostInput.text?.toString().orEmpty(), code)
-                if (ok) {
-                    dialog.dismiss()
-                }
-            }
-        }
-
-        dialog.show()
-    }
-
-    private fun pairWithCode(hostRaw: String, codeRaw: String): Boolean {
-        val host = hostRaw.trim()
-        val code = codeRaw.trim().replace(Regex("\\D"), "")
-        if (host.isBlank()) {
-            Toast.makeText(this, "Mac host is required", Toast.LENGTH_LONG).show()
-            return false
-        }
-        if (!code.matches(Regex("\\d{6}"))) {
-            Toast.makeText(this, "Enter 6-digit code", Toast.LENGTH_LONG).show()
-            return false
-        }
-
-        val payload = QrPayload(
-            version = 1,
-            url = "ws://$host:8765/ws",
-            pairingToken = code,
-            expiresAtMs = Long.MAX_VALUE,
-            deviceName = "Mac"
-        )
-        pairingStore.save(payload)
-        RelayWebSocketClient.clearConnection()
-        RelayWebSocketClient.connectIfNeeded()
-        Toast.makeText(this, "Pair code saved. Connecting...", Toast.LENGTH_SHORT).show()
-        renderState()
-        return true
-    }
-
-    private fun defaultManualPairHost(): String {
-        val saved = pairingStore.load() ?: return ""
-        return try {
-            URI(saved.url).host?.trim().orEmpty()
-        } catch (_: Exception) {
-            ""
-        }
+    private fun openManualPairScreen() {
+        startActivity(Intent(this, ManualPairActivity::class.java))
     }
 
     private fun openSamsungNotificationContentSettings() {
@@ -340,6 +290,128 @@ class MainActivity : AppCompatActivity() {
             PhoneStateCallMonitor.start(this)
             return
         }
+        triggerPhoneStatePermissionRequest()
+    }
+
+    private fun triggerCameraPermissionRequest() {
+        if (hasCameraPermission()) {
+            startEmbeddedScanner()
+            return
+        }
+        requestCameraPermission.launch(Manifest.permission.CAMERA)
+    }
+
+    private fun triggerPhoneStatePermissionRequest() {
         requestPhoneStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
+    }
+
+    private fun checkConnectionStateAndShowQrScanner() {
+        val pairing = pairingStore.load()
+        val pairingConnected = pairing != null && RelayWebSocketClient.isAuthenticated()
+
+        if (pairingConnected) {
+            pauseEmbeddedScanner()
+            val paired = pairing ?: return
+            if (!showingConnectedScreen) {
+                showingConnectedScreen = true
+                showingQrScanner = false
+                setContentView(R.layout.activity_connected)
+                currentContentRoot()?.let { applySystemInsets(it) }
+                val statusText = findViewById<android.widget.TextView>(R.id.connectedStatusText)
+                val detailsText = findViewById<android.widget.TextView>(R.id.connectedDetailsText)
+                val disconnectButton = findViewById<android.widget.Button>(R.id.disconnectButton)
+
+                statusText.text = getString(R.string.connected_status)
+                detailsText.text = getString(R.string.qr_scan_connected_details, paired.deviceName)
+
+                disconnectButton.setOnClickListener {
+                    pairingStore.clear()
+                    RelayWebSocketClient.clearConnection()
+                    showingConnectedScreen = false
+                    showingQrScanner = false
+                    checkConnectionStateAndShowQrScanner()
+                }
+            }
+        } else {
+            showingConnectedScreen = false
+            if (!showingQrScanner) {
+                showingQrScanner = true
+                setContentView(R.layout.activity_qr_scanner)
+                currentContentRoot()?.let { applySystemInsets(it) }
+                bindQrScreen(pairing, pairingConnected)
+                triggerCameraPermissionRequest()
+            } else {
+                bindQrScreen(pairing, pairingConnected)
+                if (hasCameraPermission()) {
+                    startEmbeddedScanner()
+                }
+            }
+        }
+    }
+
+    private fun bindQrScreen(pairing: QrPayload?, pairingConnected: Boolean) {
+        embeddedScannerView = findViewById(R.id.qrScannerView)
+        val statusText = findViewById<android.widget.TextView>(R.id.qrScanStatusText)
+        val detailsText = findViewById<android.widget.TextView>(R.id.qrScanDetailsText)
+        val manualPairButton = findViewById<android.widget.Button>(R.id.manualPairButton)
+
+        if (pairingConnected && pairing != null) {
+            statusText.text = getString(R.string.qr_scan_connected)
+            detailsText.text = getString(R.string.qr_scan_connected_details, pairing.deviceName)
+        } else {
+            statusText.text = getString(R.string.qr_scan_not_connected)
+            detailsText.text = if (pairing != null) {
+                getString(R.string.qr_scan_saved_waiting, pairing.deviceName)
+            } else {
+                getString(R.string.qr_scan_instructions)
+            }
+        }
+
+        manualPairButton.setOnClickListener {
+            openManualPairScreen()
+        }
+    }
+
+    private fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun startEmbeddedScanner() {
+        val scannerView = embeddedScannerView ?: return
+        scannerView.resume()
+        armSingleQrScan()
+    }
+
+    private fun armSingleQrScan() {
+        embeddedScannerView?.decodeSingle(qrScanCallback)
+    }
+
+    private fun pauseEmbeddedScanner() {
+        embeddedScannerView?.pause()
+    }
+
+    private fun currentContentRoot(): View? {
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        return content.getChildAt(0)
+    }
+
+    private fun showPermissionDeniedDialog(
+        title: String,
+        message: String,
+        onRetry: () -> Unit,
+        onExit: () -> Unit
+    ) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(getString(R.string.permission_retry)) { _, _ ->
+                onRetry()
+            }
+            .setNegativeButton(getString(R.string.permission_exit)) { _, _ ->
+                onExit()
+            }
+            .setCancelable(false)
+            .show()
     }
 }

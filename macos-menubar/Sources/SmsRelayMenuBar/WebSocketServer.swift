@@ -20,8 +20,12 @@ final class WebSocketServer {
     private var listener: NWListener?
     private var clients: [UUID: NWConnection] = [:]
     private var authenticatedClients: Set<UUID> = []
+    private var lastSeenByClient: [UUID: Date] = [:]
     private var recentlySeenIds: [String: Date] = [:]
     private var config: Config
+    private var staleSweepTimer: DispatchSourceTimer?
+    private let staleClientTimeout: TimeInterval = 95
+    private let staleClientSweepInterval: TimeInterval = 15
 
     init(config: Config) {
         self.config = config
@@ -55,6 +59,7 @@ final class WebSocketServer {
                     self?.accept(connection)
                 }
                 listener.start(queue: self.queue)
+                self.startStaleClientSweepIfNeeded()
             } catch {
                 self.onServerStateChanged?("failed: \(error.localizedDescription)")
             }
@@ -65,9 +70,12 @@ final class WebSocketServer {
         queue.async {
             self.listener?.cancel()
             self.listener = nil
+            self.staleSweepTimer?.cancel()
+            self.staleSweepTimer = nil
             self.clients.values.forEach { $0.cancel() }
             self.clients.removeAll()
             self.authenticatedClients.removeAll()
+            self.lastSeenByClient.removeAll()
             self.notifyAuthenticatedClientCountChanged()
         }
     }
@@ -141,6 +149,7 @@ final class WebSocketServer {
     private func accept(_ connection: NWConnection) {
         let id = UUID()
         clients[id] = connection
+        lastSeenByClient[id] = Date()
 
         connection.stateUpdateHandler = { [weak self] state in
             if case .failed = state {
@@ -160,6 +169,7 @@ final class WebSocketServer {
             return
         }
         connection.cancel()
+        lastSeenByClient.removeValue(forKey: id)
         let removed = authenticatedClients.remove(id) != nil
         if removed {
             notifyAuthenticatedClientCountChanged()
@@ -177,6 +187,7 @@ final class WebSocketServer {
                 self.receive(on: connection, id: id)
                 return
             }
+            self.lastSeenByClient[id] = Date()
             self.handle(data: data, context: context, clientId: id, connection: connection)
             self.receive(on: connection, id: id)
         }
@@ -197,6 +208,7 @@ final class WebSocketServer {
             let token = object["token"] as? String ?? ""
             if token == config.token || token == config.pairingCode {
                 authenticatedClients.insert(clientId)
+                lastSeenByClient[clientId] = Date()
                 notifyAuthenticatedClientCountChanged()
                 send(["type": "auth.ok"], to: connection)
                 let device = object["device"] as? String ?? "Unknown device"
@@ -295,5 +307,32 @@ final class WebSocketServer {
 
     private func notifyAuthenticatedClientCountChanged() {
         onAuthenticatedClientCountChanged?(authenticatedClients.count)
+    }
+
+    private func startStaleClientSweepIfNeeded() {
+        guard staleSweepTimer == nil else {
+            return
+        }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + staleClientSweepInterval, repeating: staleClientSweepInterval)
+        timer.setEventHandler { [weak self] in
+            self?.dropStaleAuthenticatedClients()
+        }
+        staleSweepTimer = timer
+        timer.resume()
+    }
+
+    private func dropStaleAuthenticatedClients() {
+        guard !authenticatedClients.isEmpty else {
+            return
+        }
+        let now = Date()
+        let staleIds = authenticatedClients.filter { id in
+            guard let lastSeen = lastSeenByClient[id] else {
+                return true
+            }
+            return now.timeIntervalSince(lastSeen) > staleClientTimeout
+        }
+        staleIds.forEach { dropClient($0) }
     }
 }
