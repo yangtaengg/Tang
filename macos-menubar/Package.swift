@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SmsRelayMenuBar",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v13)
     ],
@@ -12,7 +13,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "SmsRelayMenuBar",
-            path: "Sources/SmsRelayMenuBar"
+            path: "Sources/SmsRelayMenuBar",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

@@ -6,6 +6,24 @@ import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
+    struct SentReply: Identifiable, Equatable {
+        enum DeliveryStatus: Equatable {
+            case sending
+            case sent
+        }
+
+        let id: String
+        let text: String
+        let timestamp: Date
+        var status: DeliveryStatus
+    }
+
+    private struct PendingReplySms {
+        let clientMsgId: String
+        let conversationID: String
+        let replyID: String
+    }
+
     private static let fallbackTokenDefaultsKey = "pairing.token.fallback"
     @Published var serverState: String = "stopped"
     @Published private(set) var pairingHost: String = LocalNetworkInfo.defaultIPv4()
@@ -18,11 +36,12 @@ final class AppState: ObservableObject {
     @Published private(set) var pairedAppVersion: String?
     @Published var selectedMessage: SmsMessage?
     @Published var replyStatusText: String?
+    @Published private(set) var sentRepliesByConversationID: [String: [SentReply]] = [:]
 
     let messageStore = MessageStore()
     private let server: WebSocketServer
     private(set) var token: String
-    private var pendingReplySmsClientMsgId: String?
+    private var pendingReplySmsByClientMsgId: [String: PendingReplySms] = [:]
     private var pairDeviceWindow: NSWindow?
     private lazy var messageWindow: NSWindow = {
         let window = NSWindow(
@@ -31,7 +50,7 @@ final class AppState: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        window.title = "Message"
+        window.title = L("message_title")
         window.identifier = NSUserInterfaceItemIdentifier("message-detail")
         window.level = .normal
         window.isReleasedWhenClosed = false
@@ -49,6 +68,7 @@ final class AppState: ObservableObject {
     private var fallbackNotificationMessage: SmsMessage?
     private var fallbackGlobalClickMonitor: Any?
     private var fallbackLocalClickMonitor: Any?
+    private var fallbackDismissArmTime: Date = .distantPast
     private let fallbackToastDuration: TimeInterval = 8
     private static let nonExpiringExpiresAtMs: Int64 = 253402300799000
 
@@ -80,45 +100,38 @@ final class AppState: ObservableObject {
                 self?.notifyIncomingCall(call)
             }
         }
-        server.onIncomingAlarm = { [weak self] alarm in
-            Task { @MainActor in
-                self?.notifyIncomingAlarm(alarm)
-            }
-        }
         server.onReplyResult = { [weak self] _, success, reason in
             Task { @MainActor in
                 if success {
-                    self?.replyStatusText = "Reply sent"
-                    self?.showActionToast(title: "문자 답장", body: "전송 완료")
+                    self?.replyStatusText = L("reply_sent")
+                    self?.showActionToast(title: L("sms_reply_title"), body: L("send_success"))
                 } else {
-                    self?.replyStatusText = reason ?? "Reply failed"
-                    self?.showActionToast(title: "문자 답장", body: reason ?? "전송 실패")
+                    self?.replyStatusText = reason ?? L("reply_failed")
+                    self?.showActionToast(title: L("sms_reply_title"), body: reason ?? L("send_failed"))
                 }
             }
         }
         server.onReplySmsResult = { [weak self] clientMsgId, success, reason in
             Task { @MainActor in
-                if let clientMsgId,
-                   let pending = self?.pendingReplySmsClientMsgId,
-                   pending != clientMsgId {
+                guard let self else { return }
+                guard let clientMsgId,
+                      let pendingReply = self.pendingReplySmsByClientMsgId[clientMsgId] else {
                     return
                 }
-                self?.pendingReplySmsClientMsgId = nil
+                self.pendingReplySmsByClientMsgId.removeValue(forKey: clientMsgId)
+
                 if success {
-                    self?.replyStatusText = "Success!"
-                    self?.showActionToast(title: "문자 답장", body: "전송 완료")
+                    self.updateSentReplyStatus(
+                        forConversationID: pendingReply.conversationID,
+                        replyID: pendingReply.replyID,
+                        status: .sent
+                    )
+                    self.replyStatusText = L("send_success_short")
+                    self.showActionToast(title: L("sms_reply_title"), body: L("send_success"))
                 } else {
-                    self?.replyStatusText = reason ?? "SMS send failed"
-                    self?.showActionToast(title: "문자 답장", body: reason ?? "전송 실패")
-                }
-            }
-        }
-        server.onAlarmDismissResult = { [weak self] success, reason in
-            Task { @MainActor in
-                if success {
-                    self?.showActionToast(title: "알람", body: "알람을 종료했습니다")
-                } else {
-                    self?.showActionToast(title: "알람", body: reason ?? "알람 종료 실패")
+                    self.removeSentReply(forConversationID: pendingReply.conversationID, replyID: pendingReply.replyID)
+                    self.replyStatusText = reason ?? L("sms_send_failed")
+                    self.showActionToast(title: L("sms_reply_title"), body: reason ?? L("send_failed"))
                 }
             }
         }
@@ -229,8 +242,21 @@ final class AppState: ObservableObject {
         messageStore.remove(messageID: message.id)
         playTrashEmptySound()
         if selectedMessage?.id == message.id {
+            selectedMessage = messageStore.latestMessage(inConversationWith: message)
+        }
+    }
+
+    func deleteConversation(_ message: SmsMessage) {
+        let conversationID = messageStore.conversationID(for: message)
+        messageStore.removeConversation(containing: message)
+        playTrashEmptySound()
+
+        if let selected = selectedMessage,
+           messageStore.conversationID(for: selected) == conversationID {
             selectedMessage = nil
         }
+        sentRepliesByConversationID.removeValue(forKey: conversationID)
+        pendingReplySmsByClientMsgId = pendingReplySmsByClientMsgId.filter { $0.value.conversationID != conversationID }
     }
 
     func clearAllMessages() {
@@ -240,6 +266,8 @@ final class AppState: ObservableObject {
         messageStore.removeAll()
         playTrashEmptySound()
         selectedMessage = nil
+        sentRepliesByConversationID.removeAll()
+        pendingReplySmsByClientMsgId.removeAll()
     }
 
     func verificationCode(in message: SmsMessage) -> String? {
@@ -286,7 +314,7 @@ final class AppState: ObservableObject {
     func sendReply(for message: SmsMessage, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            replyStatusText = "Reply text is empty"
+            replyStatusText = L("reply_text_empty")
             return
         }
 
@@ -298,17 +326,22 @@ final class AppState: ObservableObject {
         )
 
         if sent {
-            replyStatusText = "Sending..."
+            appendSentReply(
+                text: trimmed,
+                toConversationID: messageStore.conversationID(for: message),
+                status: .sent
+            )
+            replyStatusText = L("sending")
         } else {
-            replyStatusText = "No connected Android device"
-            showActionToast(title: "문자 답장", body: "연결된 안드로이드 기기가 없습니다")
+            replyStatusText = L("no_connected_android")
+            showActionToast(title: L("sms_reply_title"), body: L("no_connected_android"))
         }
     }
 
     func sendReplySms(for message: SmsMessage, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            replyStatusText = "Reply text is empty"
+            replyStatusText = L("reply_text_empty")
             return
         }
 
@@ -325,19 +358,36 @@ final class AppState: ObservableObject {
         )
 
         if sent {
-            pendingReplySmsClientMsgId = clientMsgId
-            replyStatusText = "Sending SMS..."
+            let conversationID = messageStore.conversationID(for: message)
+            let localReplyID = UUID().uuidString
+            let pendingReply = PendingReplySms(
+                clientMsgId: clientMsgId,
+                conversationID: conversationID,
+                replyID: localReplyID
+            )
+            pendingReplySmsByClientMsgId[clientMsgId] = pendingReply
+            appendSentReply(
+                id: localReplyID,
+                text: trimmed,
+                toConversationID: conversationID,
+                status: .sending
+            )
+            replyStatusText = L("sending_sms")
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
                 guard let self else { return }
-                if self.pendingReplySmsClientMsgId == clientMsgId {
-                    self.pendingReplySmsClientMsgId = nil
-                    self.replyStatusText = "Success!"
+                if let pending = self.pendingReplySmsByClientMsgId[clientMsgId] {
+                    self.updateSentReplyStatus(
+                        forConversationID: pending.conversationID,
+                        replyID: pending.replyID,
+                        status: .sent
+                    )
+                    self.pendingReplySmsByClientMsgId.removeValue(forKey: clientMsgId)
+                    self.replyStatusText = L("send_success_short")
                 }
             }
         } else {
-            pendingReplySmsClientMsgId = nil
-            replyStatusText = "No connected Android device"
-            showActionToast(title: "문자 답장", body: "연결된 안드로이드 기기가 없습니다")
+            replyStatusText = L("no_connected_android")
+            showActionToast(title: L("sms_reply_title"), body: L("no_connected_android"))
         }
     }
 
@@ -365,7 +415,7 @@ final class AppState: ObservableObject {
     }
 
     private func notifyIncomingCall(_ call: IncomingCallEvent) {
-        let title = "Incoming Call"
+        let title = L("incoming_call")
         let body = call.displayLine
         playAlertSound(.call)
 
@@ -392,53 +442,15 @@ final class AppState: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    private func notifyIncomingAlarm(_ alarm: AlarmEvent) {
-        let title = "알람"
-        let body = alarm.time.isEmpty ? alarm.label : "\(alarm.label) - \(alarm.time)"
-        playAlertSound(.alarm)
-
-        if Bundle.main.bundleURL.pathExtension == "app" {
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            content.sound = .default
-            let request = UNNotificationRequest(
-                identifier: "alarm-\(alarm.id)",
-                content: content,
-                trigger: nil
-            )
-            UNUserNotificationCenter.current().add(request)
-        } else {
-            showFallbackAlarmNotification(
-                title: title,
-                body: body,
-                onDismiss: { [weak self] in
-                    self?.dismissIncomingAlarm()
-                },
-                onClose: {}
-            )
-        }
-    }
-
-    private func dismissIncomingAlarm() {
-        let sent = server.sendAlarmDismiss()
-        if !sent {
-            showActionToast(title: "알람", body: "연결된 안드로이드 기기가 없습니다")
-        }
-    }
-
     private enum AlertSoundKind {
         case sms
         case call
-        case alarm
     }
 
     private func playAlertSound(_ kind: AlertSoundKind) {
         let customName: String?
         switch kind {
         case .call:
-            customName = "iphone_ringtone"
-        case .alarm:
             customName = "iphone_ringtone"
         default:
             customName = "iphone_sms"
@@ -493,7 +505,7 @@ final class AppState: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        window.title = "Pair device"
+        window.title = L("pair_device_title")
         window.identifier = NSUserInterfaceItemIdentifier("pair-device")
         window.level = .normal
         window.isReleasedWhenClosed = false
@@ -509,9 +521,9 @@ final class AppState: ObservableObject {
         fallbackNotificationWindow?.close()
         fallbackNotificationMessage = message
 
-        let panel = NSPanel(
+        let panel = InteractiveToastPanel(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 200),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -520,6 +532,7 @@ final class AppState: ObservableObject {
         panel.hasShadow = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         panel.contentView = NSHostingView(rootView: FallbackMessageToastView(
@@ -527,6 +540,10 @@ final class AppState: ObservableObject {
             hasVerificationCode: verificationCode(in: message) != nil,
             onOpenDetail: { [weak self] in
                 self?.openFallbackNotificationDetail()
+            },
+            onReply: { [weak self] text in
+                self?.sendReplySms(for: message, text: text)
+                self?.closeFallbackPanelIfActive(panel)
             },
             onCopy: { [weak self] in
                 self?.copyFallbackNotificationMessage()
@@ -551,7 +568,9 @@ final class AppState: ObservableObject {
         }
 
         panel.orderFrontRegardless()
+        panel.makeKey()
         fallbackNotificationWindow = panel
+        fallbackDismissArmTime = Date().addingTimeInterval(0.35)
         installFallbackDismissMonitor()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
@@ -559,56 +578,6 @@ final class AppState: ObservableObject {
             self?.closeFallbackPanelIfActive(panel)
         }
     }
-    private func showFallbackAlarmNotification(
-        title: String,
-        body: String,
-        onDismiss: @escaping () -> Void,
-        onClose: @escaping () -> Void
-    ) {
-        fallbackNotificationWindow?.close()
-        fallbackNotificationMessage = nil
-
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 120),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isFloatingPanel = true
-        panel.level = .statusBar
-        panel.hasShadow = true
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-
-        panel.contentView = NSHostingView(rootView: FallbackAlarmToastView(
-            title: title,
-            messageText: body,
-            onDismiss: onDismiss,
-            onClose: onClose
-        ))
-
-        if let screen = preferredNotificationScreen() {
-            let visible = screen.visibleFrame
-            var frame = panel.frame
-            frame.origin = NSPoint(
-                x: visible.maxX - frame.width,
-                y: visible.maxY - frame.height
-            )
-            frame = panel.constrainFrameRect(frame, to: screen)
-            panel.setFrame(frame, display: false)
-        }
-
-        panel.orderFrontRegardless()
-        fallbackNotificationWindow = panel
-        installFallbackDismissMonitor()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
-            guard let panel else { return }
-            self?.closeFallbackPanelIfActive(panel)
-        }
-    }
-
     private func showActionToast(title: String, body: String) {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 92),
@@ -621,6 +590,7 @@ final class AppState: ObservableObject {
         panel.hasShadow = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: ActionToastView(title: title, messageText: body))
 
@@ -636,6 +606,37 @@ final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             panel.close()
         }
+    }
+
+    func sentReplies(for message: SmsMessage) -> [SentReply] {
+        sentRepliesByConversationID[messageStore.conversationID(for: message)] ?? []
+    }
+
+    func messagesInConversation(for message: SmsMessage) -> [SmsMessage] {
+        messageStore.messages(inConversationWith: message)
+    }
+
+    private func appendSentReply(id: String = UUID().uuidString, text: String, toConversationID conversationID: String, status: SentReply.DeliveryStatus) {
+        var existing = sentRepliesByConversationID[conversationID] ?? []
+        existing.append(SentReply(id: id, text: text, timestamp: Date(), status: status))
+        sentRepliesByConversationID[conversationID] = existing
+    }
+
+    private func updateSentReplyStatus(forConversationID conversationID: String, replyID: String, status: SentReply.DeliveryStatus) {
+        guard var existing = sentRepliesByConversationID[conversationID],
+              let index = existing.firstIndex(where: { $0.id == replyID }) else {
+            return
+        }
+        existing[index].status = status
+        sentRepliesByConversationID[conversationID] = existing
+    }
+
+    private func removeSentReply(forConversationID conversationID: String, replyID: String) {
+        guard var existing = sentRepliesByConversationID[conversationID] else {
+            return
+        }
+        existing.removeAll { $0.id == replyID }
+        sentRepliesByConversationID[conversationID] = existing
     }
 
     private func showFallbackCallNotification(
@@ -681,6 +682,7 @@ final class AppState: ObservableObject {
 
         panel.orderFrontRegardless()
         fallbackNotificationWindow = panel
+        fallbackDismissArmTime = Date().addingTimeInterval(0.35)
         installFallbackDismissMonitor()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
@@ -717,6 +719,7 @@ final class AppState: ObservableObject {
         removeFallbackDismissMonitor()
         fallbackNotificationWindow = nil
         fallbackNotificationMessage = nil
+        fallbackDismissArmTime = .distantPast
     }
 
     private func installFallbackDismissMonitor() {
@@ -751,6 +754,9 @@ final class AppState: ObservableObject {
     }
 
     private func handleFallbackOutsideClick(at screenPoint: NSPoint) {
+        if Date() < fallbackDismissArmTime {
+            return
+        }
         guard let panel = fallbackNotificationWindow else {
             removeFallbackDismissMonitor()
             return
@@ -782,13 +788,20 @@ final class AppState: ObservableObject {
     }
 }
 
+private final class InteractiveToastPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 private struct FallbackMessageToastView: View {
     let message: SmsMessage
     let hasVerificationCode: Bool
     let onOpenDetail: () -> Void
+    let onReply: (String) -> Void
     let onCopy: () -> Void
     let onCopyCode: () -> Void
     let onClose: () -> Void
+    @State private var replyText: String = ""
 
     private var timeText: String {
         message.timestamp.formatted(date: .omitted, time: .shortened)
@@ -800,7 +813,7 @@ private struct FallbackMessageToastView: View {
                 Circle()
                     .fill(Color.accentColor.opacity(0.85))
                     .frame(width: 7, height: 7)
-                Text("New message")
+                Text(L("new_message"))
                     .font(.system(size: 12, weight: .semibold))
                 Spacer()
                 Text(timeText)
@@ -827,12 +840,26 @@ private struct FallbackMessageToastView: View {
             .buttonStyle(.plain)
 
             HStack(spacing: 6) {
-                Button("Copy", action: onCopy)
+                TextField(L("toast_reply_placeholder"), text: $replyText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        submitReply()
+                    }
+
+                Button(L("button_send")) {
+                    submitReply()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            HStack(spacing: 6) {
+                Button(L("button_copy"), action: onCopy)
                 if hasVerificationCode {
-                    Button("Copy code", action: onCopyCode)
+                    Button(L("button_copy_code"), action: onCopyCode)
                 }
                 Spacer()
-                Button("Close", action: onClose)
+                Button(L("button_close"), action: onClose)
             }
             .font(.system(size: 12, weight: .semibold))
             .controlSize(.regular)
@@ -840,7 +867,7 @@ private struct FallbackMessageToastView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .frame(width: 380, height: 162)
+        .frame(width: 380, height: 206)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(.ultraThinMaterial)
@@ -851,6 +878,13 @@ private struct FallbackMessageToastView: View {
                 )
                 .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
         )
+    }
+
+    private func submitReply() {
+        let trimmed = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onReply(trimmed)
+        replyText = ""
     }
 }
 
@@ -880,7 +914,7 @@ private struct FallbackCallToastView: View {
                 .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             HStack(spacing: 8) {
-                Button("Hang up") {
+                Button(L("button_hang_up")) {
                     onHangUp()
                     onClose()
                 }
@@ -889,66 +923,7 @@ private struct FallbackCallToastView: View {
                 .buttonStyle(.borderedProminent)
 
                 Spacer()
-                Button("Close", action: onClose)
-                    .font(.system(size: 12, weight: .semibold))
-                    .controlSize(.regular)
-                    .buttonStyle(.bordered)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(width: 360, height: 120)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
-                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
-        )
-    }
-}
-
-private struct FallbackAlarmToastView: View {
-    let title: String
-    let messageText: String
-    let onDismiss: () -> Void
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.orange.opacity(0.85))
-                    .frame(width: 7, height: 7)
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-            }
-
-            Text(messageText)
-                .font(.system(size: 12))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            HStack(spacing: 8) {
-                Button("Snooze") {
-                    onClose()
-                }
-                .font(.system(size: 12, weight: .semibold))
-                .controlSize(.regular)
-                .buttonStyle(.borderedProminent)
-
-                Spacer()
-                Button("Dismiss") {
-                    onDismiss()
-                    onClose()
-                }
+                Button(L("button_close"), action: onClose)
                     .font(.system(size: 12, weight: .semibold))
                     .controlSize(.regular)
                     .buttonStyle(.bordered)

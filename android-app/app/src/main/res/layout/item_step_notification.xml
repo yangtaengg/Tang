@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TangStepTitle"
-            android:text="Step 1. Notification access"
+            android:text="@string/step_notification_title"
             />
 
         <com.google.android.material.card.MaterialCardView
@@ -42,7 +42,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Allow notification access first so SMS/call alerts can be relayed."
+                    android:text="@string/step_notification_description"
                     android:textAppearance="@style/TangCaptionText" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

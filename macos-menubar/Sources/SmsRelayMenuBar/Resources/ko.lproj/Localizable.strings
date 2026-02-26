@@ -1,0 +1,52 @@
+"app_name" = "Tang!";
+"menu_quit" = "종료";
+"menu_pop_all" = "모두 팝";
+"menu_paired_device" = "페어링됨: %@";
+"menu_not_paired" = "페어링 안 됨";
+"menu_no_messages" = "메시지가 없습니다";
+"menu_delete_message" = "메시지 삭제";
+
+"setup_title" = "설정";
+"setup_step_install_android" = "1) 안드로이드 앱 설치";
+"setup_step_scan_qr" = "2) 안드로이드 앱에서 QR 스캔";
+"setup_hint" = "안드로이드 앱에서: 알림 접근 ON -> QR로 페어링";
+
+"about_title" = "정보";
+"about_window_title" = "Tang 정보";
+"about_resources" = "리소스";
+
+"pair_device_title" = "기기 페어링";
+"pair_waiting_auth" = "안드로이드 인증 대기 중";
+"pair_code_title" = "6자리 페어 코드";
+"pair_host_autodetect" = "현재 Wi-Fi 네트워크에서 호스트를 자동 감지합니다.";
+"pair_refresh_qr" = "QR 새로고침";
+"pair_regenerate_token" = "토큰 재생성";
+"pair_copy_payload" = "페이로드 복사";
+
+"message_title" = "메시지";
+"message_reply_placeholder" = "답장 입력...";
+"toast_reply_placeholder" = "빠른 답장 입력...";
+"message_none_selected" = "선택된 메시지가 없습니다";
+"message_sent_replies" = "내가 보낸 답장";
+
+"button_send" = "보내기";
+"button_clear" = "지우기";
+"button_copy" = "복사";
+"button_copy_code" = "인증번호 복사";
+"button_close" = "닫기";
+"button_hang_up" = "끊기";
+
+"new_message" = "새 메시지";
+"incoming_call" = "수신 전화";
+"sms_reply_title" = "문자 답장";
+
+"reply_sent" = "답장 전송 완료";
+"reply_failed" = "답장 전송 실패";
+"sms_send_failed" = "문자 전송 실패";
+"reply_text_empty" = "답장 내용이 비어 있습니다";
+"sending" = "전송 중...";
+"sending_sms" = "문자 전송 중...";
+"send_success" = "전송 완료";
+"send_success_short" = "성공";
+"send_failed" = "전송 실패";
+"no_connected_android" = "연결된 안드로이드 기기가 없습니다";

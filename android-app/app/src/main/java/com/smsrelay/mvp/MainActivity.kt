@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 PhoneStateCallMonitor.start(this)
-                Toast.makeText(this, "Incoming call alerts enabled.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_incoming_call_enabled), Toast.LENGTH_SHORT).show()
                 runSequentialPermissionFlow()
             } else {
                 showPermissionDeniedDialog(
@@ -82,12 +82,12 @@ class MainActivity : AppCompatActivity() {
     private val requestSendSmsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                Toast.makeText(this, "SMS sending permission granted.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_sms_permission_granted), Toast.LENGTH_SHORT).show()
                 runSequentialPermissionFlow()
             } else {
                 Toast.makeText(
                     this,
-                    "SMS sending denied. Mac-triggered SMS send will be blocked.",
+                    getString(R.string.toast_sms_permission_denied),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -101,12 +101,12 @@ class MainActivity : AppCompatActivity() {
             pairingStore.save(payload)
             RelayWebSocketClient.clearConnection()
             RelayWebSocketClient.connectIfNeeded()
-            Toast.makeText(this, "Paired with ${payload.deviceName}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_paired_with_device, payload.deviceName), Toast.LENGTH_SHORT).show()
             renderState()
             checkConnectionStateAndShowQrScanner()
-        }.onFailure { error ->
-            Toast.makeText(this, "Invalid QR: ${error.message}", Toast.LENGTH_LONG).show()
-            armSingleQrScan()
+        }.onFailure {
+            Toast.makeText(this, getString(R.string.qr_scan_invalid), Toast.LENGTH_LONG).show()
+            startEmbeddedScanner()
         }
     }
 
@@ -140,7 +140,7 @@ class MainActivity : AppCompatActivity() {
                 pairingStore.clear()
                 RelayWebSocketClient.clearConnection()
                 renderState()
-                Toast.makeText(this, "Pairing cleared", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_pairing_cleared), Toast.LENGTH_SHORT).show()
             },
             onRequestBatteryExclusion = {
                 val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
@@ -227,14 +227,14 @@ class MainActivity : AppCompatActivity() {
         }
         notificationAccessDialogShown = true
         MaterialAlertDialogBuilder(this)
-            .setTitle("Notification access required")
-            .setMessage("To relay SMS/call/alarm to Mac, enable notification access for SMS Relay.")
+            .setTitle(getString(R.string.notification_access_required_title))
+            .setMessage(getString(R.string.notification_access_required_message))
             .setCancelable(false)
-            .setPositiveButton("Open settings") { _, _ ->
+            .setPositiveButton(getString(R.string.open_settings)) { _, _ ->
                 startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
                 notificationAccessDialogShown = false
             }
-            .setNegativeButton("Later") { _, _ ->
+            .setNegativeButton(getString(R.string.later)) { _, _ ->
                 notificationAccessDialogShown = false
             }
             .show()
@@ -246,17 +246,17 @@ class MainActivity : AppCompatActivity() {
         }
         batteryOptimizationDialogShown = true
         MaterialAlertDialogBuilder(this)
-            .setTitle("Battery optimization")
-            .setMessage("Disable battery optimization for SMS Relay to keep background relay stable.")
+            .setTitle(getString(R.string.battery_optimization_title))
+            .setMessage(getString(R.string.battery_optimization_message))
             .setCancelable(false)
-            .setPositiveButton("Open settings") { _, _ ->
+            .setPositiveButton(getString(R.string.open_settings)) { _, _ ->
                 val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
                 if (!launched) {
                     BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
                 }
                 batteryOptimizationDialogShown = false
             }
-            .setNegativeButton("Later") { _, _ ->
+            .setNegativeButton(getString(R.string.later)) { _, _ ->
                 batteryOptimizationDialogShown = false
             }
             .show()
@@ -280,9 +280,9 @@ class MainActivity : AppCompatActivity() {
     private fun renderState() {
         val notificationAccess = NotificationAccessUtil.isEnabled(this)
         val notificationAccessStatus = if (notificationAccess) {
-            "✓ Notification Access: Enabled"
+            getString(R.string.status_notification_access_enabled)
         } else {
-            "Notification Access: Disabled"
+            getString(R.string.status_notification_access_disabled)
         }
 
         val pairing = pairingStore.load()
@@ -290,28 +290,28 @@ class MainActivity : AppCompatActivity() {
         val pairingStatus: String
         val pairingDetails: String
         if (pairing == null) {
-            pairingStatus = "Pairing: Not paired"
-            pairingDetails = "Scan the QR shown by the macOS app."
+            pairingStatus = getString(R.string.status_pairing_not_paired)
+            pairingDetails = getString(R.string.status_pairing_not_paired_details)
         } else if (pairingConnected) {
-            pairingStatus = "✓ Pairing: Token connected"
+            pairingStatus = getString(R.string.status_pairing_connected)
             pairingDetails = pairing.deviceName
         } else {
-            pairingStatus = "Pairing: Token saved"
-            pairingDetails = "${pairing.deviceName}\n(Token saved does not guarantee WebSocket auth connected)"
+            pairingStatus = getString(R.string.status_pairing_token_saved)
+            pairingDetails = getString(R.string.status_pairing_token_saved_details, pairing.deviceName)
         }
 
         val excluded = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
         val batteryStatus = if (excluded) {
-            "✓ Battery optimization exclusion: Enabled"
+            getString(R.string.status_battery_optimization_enabled)
         } else {
-            "Battery optimization exclusion: Disabled"
+            getString(R.string.status_battery_optimization_disabled)
         }
 
         val smsGranted = PermissionHelper.hasSendSmsPermission(this)
         val smsPermissionStatus = if (smsGranted) {
-            "✓ SMS Permission: Granted"
+            getString(R.string.status_sms_permission_granted)
         } else {
-            "SMS Permission: Not granted (reply_sms blocked)"
+            getString(R.string.status_sms_permission_not_granted)
         }
 
         onboardingPagerAdapter.updateState(
@@ -336,7 +336,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openSamsungNotificationContentSettings() {
         if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
-            Toast.makeText(this, "Samsung device only", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_samsung_only), Toast.LENGTH_SHORT).show()
             return
         }
 

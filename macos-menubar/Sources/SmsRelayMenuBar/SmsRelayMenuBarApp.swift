@@ -69,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let symbolName = count > 0 ? "message.badge" : "message"
-        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Tang!")
+        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: L("app_name"))
     }
 
     private func appIconImage() -> NSImage {
@@ -153,17 +153,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
-        let pairItem = NSMenuItem(title: "Pair device", action: #selector(openPairDeviceFromMenu), keyEquivalent: "")
+        let pairItem = NSMenuItem(title: L("pair_device_title"), action: #selector(openPairDeviceFromMenu), keyEquivalent: "")
         pairItem.target = self
         menu.addItem(pairItem)
 
-        let aboutItem = NSMenuItem(title: "About", action: #selector(openAboutFromMenu), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: L("about_title"), action: #selector(openAboutFromMenu), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
 
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L("menu_quit"), action: #selector(quitFromMenu), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -251,7 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "About Tang"
+        window.title = L("about_window_title")
         window.level = .normal
         window.isReleasedWhenClosed = false
         window.isOpaque = false
@@ -270,22 +270,22 @@ private struct OnboardingSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Tang!")
+                Text(L("app_name"))
                     .font(.headline)
                 Spacer()
-                Text("Setup")
+                Text(L("setup_title"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Text("1) Install Android app")
+            Text(L("setup_step_install_android"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             Link("github.com/yangtaengg/Tang/releases/latest", destination: URL(string: "https://github.com/yangtaengg/Tang/releases/latest")!)
                 .font(.body)
 
-            Text("2) Scan QR in Android app")
+            Text(L("setup_step_scan_qr"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -303,7 +303,7 @@ private struct OnboardingSettingsView: View {
                 .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
 
-            Text("Use Android app: Notification Access ON -> Pair via QR")
+            Text(L("setup_hint"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -330,10 +330,10 @@ private struct AboutView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Tang!")
+                Text(L("app_name"))
                     .font(.headline)
                 Spacer()
-                Text("About")
+                Text(L("about_title"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -343,7 +343,7 @@ private struct AboutView: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Resources")
+                Text(L("about_resources"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Link("buymeacoffee.com/andyyang", destination: URL(string: "https://buymeacoffee.com/andyyang")!)

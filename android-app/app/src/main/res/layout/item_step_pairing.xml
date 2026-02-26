@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TangStepTitle"
-            android:text="Step 3. Pair with Mac"
+            android:text="@string/step_pairing_title"
             />
 
         <com.google.android.material.card.MaterialCardView

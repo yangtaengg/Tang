@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tang!</string>
+    <string name="notification_service_label">SMS Relay 알림 리스너</string>
+    <string name="policy_summary">삼성/구글 메시지 알림 내용을 읽고, 수신 전화 알림을 중계하며, SEND_SMS 권한이 있으면 페어링된 수신자에게 SMS를 보낼 수 있습니다.</string>
+    <string name="open_notification_access">알림 접근 권한 열기</string>
+    <string name="open_samsung_notification_content_settings">삼성 알림 내용 설정 열기</string>
+    <string name="scan_qr">QR 스캔으로 페어링</string>
+    <string name="clear_pairing">페어링 해제</string>
+    <string name="open_battery_settings">배터리 최적화 안내</string>
+    <string name="request_battery_exclusion">배터리 최적화 제외 허용</string>
+    <string name="request_sms_permission">SMS 전송 권한 허용</string>
+    <string name="manual_pair_code_hint">6자리 코드</string>
+    <string name="manual_pair_connect">6자리 PIN으로 페어링</string>
+    <string name="manual_pair_dialog_title">6자리 PIN으로 연결</string>
+    <string name="manual_pair_screen_title">6자리 PIN 입력</string>
+    <string name="manual_pair_dialog_subtitle">현재 Wi-Fi에서 Mac을 자동으로 찾습니다.</string>
+    <string name="manual_pair_host_label">Mac 주소</string>
+    <string name="manual_pair_host_hint">예: 192.168.0.12 또는 ws://192.168.0.12:8765/ws</string>
+    <string name="manual_pair_host_required">현재 Wi-Fi에서 Mac을 찾지 못했습니다. Mac IP/호스트를 직접 입력하세요.</string>
+    <string name="manual_pair_code_label">6자리 PIN</string>
+    <string name="manual_pair_cancel">취소</string>
+    <string name="manual_pair_back">뒤로</string>
+    <string name="manual_pair_confirm">연결</string>
+    <string name="manual_pair_finding_mac">Mac 연결 중...</string>
+    <string name="manual_pair_invalid_code">6자리를 모두 입력하세요.</string>
+    <string name="manual_pair_auth_failed">PIN 인증에 실패했습니다. 6자리 코드를 확인하고 다시 시도하세요.</string>
+
+    <string name="toast_incoming_call_enabled">수신 전화 알림이 활성화되었습니다.</string>
+    <string name="toast_sms_permission_granted">SMS 전송 권한이 허용되었습니다.</string>
+    <string name="toast_sms_permission_denied">SMS 전송이 거부되어 Mac에서 보낸 답장은 차단됩니다.</string>
+    <string name="toast_paired_with_device">%1$s와 페어링되었습니다.</string>
+    <string name="toast_pairing_cleared">페어링이 해제되었습니다.</string>
+    <string name="toast_samsung_only">삼성 기기에서만 지원됩니다.</string>
+
+    <string name="notification_access_required_title">알림 접근 권한 필요</string>
+    <string name="notification_access_required_message">SMS/전화를 Mac으로 중계하려면 SMS Relay 알림 접근 권한을 켜주세요.</string>
+    <string name="battery_optimization_title">배터리 최적화</string>
+    <string name="battery_optimization_message">백그라운드 중계를 안정적으로 유지하려면 SMS Relay를 배터리 최적화에서 제외하세요.</string>
+    <string name="open_settings">설정 열기</string>
+    <string name="later">나중에</string>
+
+    <string name="connected_status">연결됨</string>
+    <string name="connected_to_mac">Mac에 연결됨</string>
+    <string name="disconnect">연결 해제</string>
+
+    <string name="qr_scan_subtitle">Mac에 연결하세요</string>
+    <string name="qr_scanner_viewfinder_hint">바코드를 사각형 안에 맞춰 스캔하세요.</string>
+    <string name="qr_scan_invalid">잘못된 QR 입니다.</string>
+    <string name="qr_scan_not_connected">연결되지 않음</string>
+    <string name="qr_scan_instructions">macOS 앱의 QR을 스캔하거나 PIN을 입력하세요</string>
+    <string name="qr_scan_saved_waiting">%1$s의 페어 토큰이 저장되어 있으며 연결 대기 중입니다.</string>
+    <string name="qr_scan_connected">연결됨</string>
+    <string name="qr_scan_connected_details">%1$s에 연결되었습니다.</string>
+    <string name="camera_permission_required">QR 스캔에 카메라 권한이 필요합니다.</string>
+    <string name="camera_permission_denied">카메라 권한이 거부되었습니다. QR 페어링을 위해 카메라 권한이 필요합니다. 계속하려면 권한을 허용하세요.</string>
+    <string name="permission_retry">다시 시도</string>
+    <string name="permission_exit">종료</string>
+    <string name="phone_state_permission_required">전화 알림을 위해 전화 상태 권한이 필요합니다.</string>
+    <string name="phone_state_permission_denied">전화 상태 권한이 거부되었습니다. 이 권한 없이는 수신 전화 알림을 표시할 수 없습니다. 계속하려면 권한을 허용하세요.</string>
+
+    <string name="status_notification_access_enabled">✓ 알림 접근: 활성화</string>
+    <string name="status_notification_access_disabled">알림 접근: 비활성화</string>
+    <string name="status_pairing_not_paired">페어링: 미연결</string>
+    <string name="status_pairing_not_paired_details">macOS 앱에 표시된 QR을 스캔하세요.</string>
+    <string name="status_pairing_connected">✓ 페어링: 토큰 연결됨</string>
+    <string name="status_pairing_token_saved">페어링: 토큰 저장됨</string>
+    <string name="status_pairing_token_saved_details">%1$s\n(토큰 저장만으로 WebSocket 인증 연결이 보장되지는 않습니다)</string>
+    <string name="status_battery_optimization_enabled">✓ 배터리 최적화 제외: 활성화</string>
+    <string name="status_battery_optimization_disabled">배터리 최적화 제외: 비활성화</string>
+    <string name="status_sms_permission_granted">✓ SMS 권한: 허용됨</string>
+    <string name="status_sms_permission_not_granted">SMS 권한: 미허용 (reply_sms 차단)</string>
+
+    <string name="step_notification_title">1단계. 알림 접근 권한</string>
+    <string name="step_notification_description">SMS/전화 알림 중계를 위해 먼저 알림 접근 권한을 허용하세요.</string>
+    <string name="step_sms_title">2단계. SMS 권한</string>
+    <string name="step_sms_description">Mac에서 답장을 보내려면 SMS 권한을 허용하세요.</string>
+    <string name="step_pairing_title">3단계. Mac과 페어링</string>
+    <string name="step_battery_title">4단계. 배터리 최적화</string>
+    <string name="step_battery_description">백그라운드 안정성을 위해 배터리 최적화 제외를 허용하세요.</string>
+
+    <string name="fg_service_title">Tang 연결됨</string>
+    <string name="fg_service_text">백그라운드에서 릴레이 연결을 유지하는 중입니다.</string>
+</resources>

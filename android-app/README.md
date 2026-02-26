@@ -60,7 +60,7 @@ Pairing token is persistent (non-expiring) unless you manually clear pairing or 
 Client sends auth first:
 
 ```json
-{"type":"auth","token":"...","device":"SM-S918N","appVersion":"0.1.0"}
+{"type":"auth","token":"...","device":"SM-S918N","appVersion":"5"}
 ```
 
 After `auth.ok`, client sends events:

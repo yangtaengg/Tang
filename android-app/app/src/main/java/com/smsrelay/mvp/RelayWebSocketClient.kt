@@ -42,7 +42,6 @@ object RelayWebSocketClient {
     private var lastDiscoveryAttemptMs = 0L
     private val smsQueue = ArrayDeque<RelaySmsEvent>()
     private val callQueue = ArrayDeque<RelayCallEvent>()
-    private val alarmQueue = ArrayDeque<RelayAlarmEvent>()
     private const val REPLY_SMS_RESULT_TTL_MS = 10 * 60 * 1000L
     private const val HEARTBEAT_INTERVAL_SECONDS = 20L
     private val recentReplySmsResults = LinkedHashMap<String, CachedReplySmsResult>(128, 0.75f, true)
@@ -90,7 +89,7 @@ object RelayWebSocketClient {
                     .put("type", "auth")
                     .put("token", payload.pairingToken)
                     .put("device", Build.MODEL)
-                    .put("appVersion", "0.1.0")
+            .put("appVersion", "5")
                 webSocket.send(auth.toString())
             }
 
@@ -149,7 +148,6 @@ object RelayWebSocketClient {
         closeAndReset()
         smsQueue.clear()
         callQueue.clear()
-        alarmQueue.clear()
         QuickReplyStore.clear()
     }
 
@@ -186,10 +184,6 @@ object RelayWebSocketClient {
     fun enqueueIncomingCall(event: RelayCallEvent) {
         enqueueWithLimit(callQueue, event, 30)
     }
-    @Synchronized
-    fun enqueueIncomingAlarm(event: RelayAlarmEvent) {
-        enqueueWithLimit(alarmQueue, event, 50)
-    }
 
     private fun <T> enqueueWithLimit(queue: ArrayDeque<T>, event: T, maxSize: Int) {
         if (queue.size >= maxSize) {
@@ -210,7 +204,6 @@ object RelayWebSocketClient {
         }
         flushSmsQueue(webSocket)
         flushCallQueue(webSocket)
-        flushAlarmQueue(webSocket)
     }
 
     private fun flushSmsQueue(webSocket: WebSocket) {
@@ -229,13 +222,6 @@ object RelayWebSocketClient {
         }
     }
 
-    private fun flushAlarmQueue(webSocket: WebSocket) {
-        while (alarmQueue.isNotEmpty()) {
-            val event = alarmQueue.removeFirst()
-            val payload = buildAlarmPayload(event)
-            webSocket.send(payload.toString())
-        }
-    }
 
     private fun buildSmsPayload(event: RelaySmsEvent): JSONObject {
         val payload = JSONObject()
@@ -258,15 +244,6 @@ object RelayWebSocketClient {
             .put("timestamp", event.timestamp)
             .put("from", event.from)
         event.name?.let { payload.put("name", it) }
-        return payload
-    }
-    private fun buildAlarmPayload(event: RelayAlarmEvent): JSONObject {
-        val payload = JSONObject()
-            .put("type", "alarm.incoming")
-            .put("id", event.id)
-            .put("timestamp", event.timestamp)
-            .put("label", event.label)
-            .put("time", event.time)
         return payload
     }
 

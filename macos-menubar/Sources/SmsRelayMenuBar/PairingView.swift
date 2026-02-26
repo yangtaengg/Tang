@@ -7,33 +7,33 @@ struct PairingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Tang!")
+                Text(L("app_name"))
                     .font(.headline)
                 Spacer()
-                Text("Pair device")
+                Text(L("pair_device_title"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let device = appState.pairedDeviceName {
-                Text("Paired: \(device)")
+                Text(L("menu_paired_device", device))
                     .font(.caption)
                     .foregroundStyle(.green)
             } else {
-                Text("Waiting for Android authentication")
+                Text(L("pair_waiting_auth"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("6-digit Pair Code")
+                Text(L("pair_code_title"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(appState.pairingCode)
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .textSelection(.enabled)
 
-                Text("Host is auto-detected from current Wi-Fi network.")
+                Text(L("pair_host_autodetect"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -41,19 +41,19 @@ struct PairingView: View {
             .background(Color.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
 
             HStack {
-                Button("Refresh QR") {
+                Button(L("pair_refresh_qr")) {
                     appState.refreshPairingQR()
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                Button("Regenerate token") {
+                Button(L("pair_regenerate_token")) {
                     appState.regenerateToken()
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .controlSize(.large)
                 .buttonStyle(.bordered)
-                Button("Copy payload") {
+                Button(L("pair_copy_payload")) {
                     appState.copyPairingPayload()
                 }
                 .font(.system(size: 13, weight: .semibold))

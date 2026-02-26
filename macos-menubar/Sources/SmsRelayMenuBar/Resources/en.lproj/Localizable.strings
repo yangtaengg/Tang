@@ -1,0 +1,52 @@
+"app_name" = "Tang!";
+"menu_quit" = "Quit";
+"menu_pop_all" = "Pop all";
+"menu_paired_device" = "Paired: %@";
+"menu_not_paired" = "Not paired";
+"menu_no_messages" = "No messages yet";
+"menu_delete_message" = "Delete message";
+
+"setup_title" = "Setup";
+"setup_step_install_android" = "1) Install Android app";
+"setup_step_scan_qr" = "2) Scan QR in Android app";
+"setup_hint" = "Use Android app: Notification Access ON -> Pair via QR";
+
+"about_title" = "About";
+"about_window_title" = "About Tang";
+"about_resources" = "Resources";
+
+"pair_device_title" = "Pair device";
+"pair_waiting_auth" = "Waiting for Android authentication";
+"pair_code_title" = "6-digit Pair Code";
+"pair_host_autodetect" = "Host is auto-detected from current Wi-Fi network.";
+"pair_refresh_qr" = "Refresh QR";
+"pair_regenerate_token" = "Regenerate token";
+"pair_copy_payload" = "Copy payload";
+
+"message_title" = "Message";
+"message_reply_placeholder" = "Type a reply...";
+"toast_reply_placeholder" = "Quick reply...";
+"message_none_selected" = "No message selected";
+"message_sent_replies" = "Your replies";
+
+"button_send" = "Send";
+"button_clear" = "Clear";
+"button_copy" = "Copy";
+"button_copy_code" = "Copy code";
+"button_close" = "Close";
+"button_hang_up" = "Hang up";
+
+"new_message" = "New message";
+"incoming_call" = "Incoming Call";
+"sms_reply_title" = "SMS reply";
+
+"reply_sent" = "Reply sent";
+"reply_failed" = "Reply failed";
+"sms_send_failed" = "SMS send failed";
+"reply_text_empty" = "Reply text is empty";
+"sending" = "Sending...";
+"sending_sms" = "Sending SMS...";
+"send_success" = "Sent";
+"send_success_short" = "Success!";
+"send_failed" = "Failed to send";
+"no_connected_android" = "No connected Android device";

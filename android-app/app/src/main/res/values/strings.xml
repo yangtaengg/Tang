@@ -26,11 +26,47 @@
     <string name="manual_pair_invalid_code">Enter all 6 digits.</string>
     <string name="manual_pair_auth_failed">PIN verification failed. Please check the 6-digit code and try again.</string>
 
+    <string name="toast_incoming_call_enabled">Incoming call alerts enabled.</string>
+    <string name="toast_sms_permission_granted">SMS sending permission granted.</string>
+    <string name="toast_sms_permission_denied">SMS sending denied. Mac-triggered reply sending will be blocked.</string>
+    <string name="toast_paired_with_device">Paired with %1$s</string>
+    <string name="toast_pairing_cleared">Pairing cleared</string>
+    <string name="toast_samsung_only">Samsung device only</string>
+
+    <string name="notification_access_required_title">Notification access required</string>
+    <string name="notification_access_required_message">To relay SMS/call to Mac, enable notification access for SMS Relay.</string>
+    <string name="battery_optimization_title">Battery optimization</string>
+    <string name="battery_optimization_message">Disable battery optimization for SMS Relay to keep background relay stable.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="later">Later</string>
+
+    <string name="status_notification_access_enabled">✓ Notification Access: Enabled</string>
+    <string name="status_notification_access_disabled">Notification Access: Disabled</string>
+    <string name="status_pairing_not_paired">Pairing: Not paired</string>
+    <string name="status_pairing_not_paired_details">Scan the QR shown by the macOS app.</string>
+    <string name="status_pairing_connected">✓ Pairing: Token connected</string>
+    <string name="status_pairing_token_saved">Pairing: Token saved</string>
+    <string name="status_pairing_token_saved_details">%1$s\n(Token saved does not guarantee WebSocket auth connected)</string>
+    <string name="status_battery_optimization_enabled">✓ Battery optimization exclusion: Enabled</string>
+    <string name="status_battery_optimization_disabled">Battery optimization exclusion: Disabled</string>
+    <string name="status_sms_permission_granted">✓ SMS Permission: Granted</string>
+    <string name="status_sms_permission_not_granted">SMS Permission: Not granted (reply_sms blocked)</string>
+
+    <string name="step_notification_title">Step 1. Notification access</string>
+    <string name="step_notification_description">Allow notification access first so SMS/call alerts can be relayed.</string>
+    <string name="step_sms_title">Step 2. SMS permission</string>
+    <string name="step_sms_description">Grant SMS permission if you want Mac-triggered reply sending.</string>
+    <string name="step_pairing_title">Step 3. Pair with Mac</string>
+    <string name="step_battery_title">Step 4. Battery optimization</string>
+    <string name="step_battery_description">Allow battery optimization exclusion for better background reliability.</string>
+
     <string name="connected_status">Connected</string>
     <string name="connected_to_mac">Connected to Mac</string>
     <string name="disconnect">Disconnect</string>
 
     <string name="qr_scan_subtitle">Connect to your Mac</string>
+    <string name="qr_scanner_viewfinder_hint">Place a barcode inside the viewfinder rectangle to scan it.</string>
+    <string name="qr_scan_invalid">Invalid QR code.</string>
     <string name="qr_scan_not_connected">Not connected</string>
     <string name="qr_scan_instructions">Scan the QR code or enter PIN from the macOS app</string>
     <string name="qr_scan_saved_waiting">Pair token for %s is saved, waiting for connection</string>

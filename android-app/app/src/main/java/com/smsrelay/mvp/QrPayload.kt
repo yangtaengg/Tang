@@ -25,9 +25,3 @@ data class RelayCallEvent(
     val from: String,
     val name: String?
 )
-data class RelayAlarmEvent(
-    val id: String,
-    val timestamp: Long,
-    val label: String,
-    val time: String
-)

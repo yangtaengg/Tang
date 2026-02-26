@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TangStepTitle"
-            android:text="Step 2. SMS permission"
+            android:text="@string/step_sms_title"
             />
 
         <com.google.android.material.card.MaterialCardView
@@ -42,7 +42,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Grant SMS permission if you want Mac-triggered reply sending."
+                    android:text="@string/step_sms_description"
                     android:textAppearance="@style/TangCaptionText" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

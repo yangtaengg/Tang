@@ -14,6 +14,7 @@ class SmsNotificationListenerService : NotificationListenerService() {
             val active = service.activeNotifications ?: emptyArray()
             return CallActionExecutor.hangUpFrom(active)
         }
+
     }
 
     override fun onCreate() {
@@ -37,20 +38,28 @@ class SmsNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        QuickReplyStore.updateFromNotification(sbn)
-        val active = activeNotifications ?: emptyArray()
-        QuickReplyStore.refreshFromActiveNotifications(active)
+        val isSmsSource = SmsNotificationParser.isSupportedPackage(sbn.packageName)
+        val isCallSource = CallNotificationParser.isSupportedPackage(sbn.packageName)
+        if (!isSmsSource && !isCallSource) {
+            return
+        }
 
-        val callEvent = CallNotificationParser.parse(sbn)
+        if (isSmsSource) {
+            QuickReplyStore.updateFromNotification(sbn)
+        }
+        val active = activeNotifications ?: emptyArray()
+        if (isSmsSource) {
+            QuickReplyStore.refreshFromActiveNotifications(active)
+        }
+
+        val callEvent = if (isCallSource) CallNotificationParser.parse(sbn) else null
         if (callEvent != null && !NotificationDeduper.isDuplicate(callEvent)) {
             RelayWebSocketClient.enqueueIncomingCall(callEvent)
         }
 
-        val alarmEvent = AlarmNotificationParser.parse(sbn)
-        if (alarmEvent != null && !NotificationDeduper.isDuplicate(alarmEvent)) {
-            RelayWebSocketClient.enqueueIncomingAlarm(alarmEvent)
+        if (!isSmsSource) {
+            return
         }
-
         val fallbackReplyKey = QuickReplyStore.fallbackReplyKeyFor(sbn, active)
         val event = SmsNotificationParser.parse(sbn, fallbackReplyKey) ?: return
         if (NotificationDeduper.isDuplicate(event)) {

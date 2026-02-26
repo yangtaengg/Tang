@@ -14,18 +14,20 @@ object CallNotificationParser {
         "com.android.server.telecom"
     )
 
+    fun isSupportedPackage(packageName: String): Boolean {
+        return knownDialerPackages.contains(packageName)
+    }
+
     fun parse(sbn: StatusBarNotification): RelayCallEvent? {
         val notification = sbn.notification
-        val category = notification.category.orEmpty()
         val extras = notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim().orEmpty()
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim().orEmpty()
 
-        val fromKnownDialer = knownDialerPackages.contains(sbn.packageName)
-        val isCallCategory = category == Notification.CATEGORY_CALL
+        val fromKnownDialer = isSupportedPackage(sbn.packageName)
         val looksIncomingCall = isIncomingCallLabel(title) || isIncomingCallLabel(text) || isIncomingCallLabel(subText)
-        if (!fromKnownDialer && !isCallCategory) {
+        if (!fromKnownDialer) {
             return null
         }
         if (isMissedCallLabel(title) || isMissedCallLabel(text) || isMissedCallLabel(subText)) {

@@ -17,15 +17,17 @@ object SmsNotificationParser {
         "com.android.messaging"
     )
 
+    fun isSupportedPackage(packageName: String): Boolean {
+        return allowedPackages.contains(packageName)
+    }
+
     fun parse(sbn: StatusBarNotification, fallbackReplyKey: String? = null): RelaySmsEvent? {
-        val category = sbn.notification.category.orEmpty()
-        val precomputedReplyKey = QuickReplyStore.replyKeyIfAvailable(sbn) ?: fallbackReplyKey
-        val fromAllowedPackage = allowedPackages.contains(sbn.packageName)
-        val looksLikeMessageCategory = category == Notification.CATEGORY_MESSAGE
-        val hasReplyCapability = !precomputedReplyKey.isNullOrBlank()
-        if (!fromAllowedPackage && !looksLikeMessageCategory && !hasReplyCapability) {
+        val fromAllowedPackage = isSupportedPackage(sbn.packageName)
+        if (!fromAllowedPackage) {
             return null
         }
+
+        val precomputedReplyKey = QuickReplyStore.replyKeyIfAvailable(sbn) ?: fallbackReplyKey
 
         val replyKey = precomputedReplyKey
         val isGroupSummary = (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0

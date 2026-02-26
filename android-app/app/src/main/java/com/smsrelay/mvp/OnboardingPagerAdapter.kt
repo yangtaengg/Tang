@@ -33,11 +33,11 @@ class OnboardingPagerAdapter(
 ) : RecyclerView.Adapter<OnboardingPagerAdapter.StepViewHolder>() {
 
     private var state: OnboardingUiState = OnboardingUiState(
-        notificationAccessStatus = "Notification Access: Unknown",
-        smsPermissionStatus = "SMS Permission: Unknown",
-        pairingStatus = "Pairing: Unknown",
+        notificationAccessStatus = "",
+        smsPermissionStatus = "",
+        pairingStatus = "",
         pairingDetails = "",
-        batteryStatus = "Battery optimization exclusion: Unknown",
+        batteryStatus = "",
         batteryRequestEnabled = true,
         notificationAccessGranted = false,
         smsPermissionGranted = false,

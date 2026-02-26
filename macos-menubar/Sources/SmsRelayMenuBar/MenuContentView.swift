@@ -12,7 +12,7 @@ struct MenuContentView: View {
     }
 
     private var messageListHeight: CGFloat {
-        let visibleCount = min(messageStore.messages.count, 3)
+        let visibleCount = min(messageStore.conversationHeads.count, 3)
         let rowHeight: CGFloat = 64
         let rowSpacing: CGFloat = 8
         guard visibleCount > 0 else { return 0 }
@@ -22,37 +22,37 @@ struct MenuContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Tang!")
+                Text(L("app_name"))
                     .font(.headline)
                 Spacer()
-                Button("Pop all") {
+                Button(L("menu_pop_all")) {
                     appState.clearAllMessages()
                 }
                 .font(.caption)
                 .buttonStyle(.bordered)
-                .disabled(messageStore.messages.isEmpty)
+                .disabled(messageStore.conversationHeads.isEmpty)
             }
 
             if let device = appState.pairedDeviceName {
-                Text("Paired: \(device)")
+                Text(L("menu_paired_device", device))
                     .font(.caption)
                     .foregroundStyle(.green)
             } else {
-                Text("Not paired")
+                Text(L("menu_not_paired"))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
 
             Divider()
 
-            if messageStore.messages.isEmpty {
-                Text("No messages yet")
+            if messageStore.conversationHeads.isEmpty {
+                Text(L("menu_no_messages"))
                     .foregroundStyle(.secondary)
                     .font(.caption)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(messageStore.messages) { message in
+                        ForEach(messageStore.conversationHeads) { message in
                             HStack(spacing: 8) {
                                 Button {
                                     appState.openMessageDetail(message)
@@ -75,12 +75,12 @@ struct MenuContentView: View {
                                 .buttonStyle(.plain)
 
                                 Button {
-                                    appState.deleteMessage(message)
+                                    appState.deleteConversation(message)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(.red)
-                                        .accessibilityLabel("Delete message")
+                                        .accessibilityLabel(L("menu_delete_message"))
                                 }
                                 .buttonStyle(.plain)
                                 .opacity(hoveredMessageID == message.id ? 1 : 0)
