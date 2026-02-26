@@ -10,11 +10,14 @@ final class WebSocketServer {
 
     var onSmsMessage: ((SmsMessage) -> Void)?
     var onIncomingCall: ((IncomingCallEvent) -> Void)?
+    var onIncomingAlarm: ((AlarmEvent) -> Void)?
     var onReplyResult: ((String?, Bool, String?) -> Void)?
     var onReplySmsResult: ((String?, Bool, String?) -> Void)?
+    var onAlarmDismissResult: ((Bool, String?) -> Void)?
     var onServerStateChanged: ((String) -> Void)?
     var onClientAuthenticated: ((String, String) -> Void)?
     var onAuthenticatedClientCountChanged: ((Int) -> Void)?
+    var onTokenAdopted: ((String) -> Void)?
 
     private let queue = DispatchQueue(label: "smsrelay.ws.server")
     private var listener: NWListener?
@@ -146,6 +149,20 @@ final class WebSocketServer {
         }
     }
 
+    func sendAlarmDismiss() -> Bool {
+        queue.sync {
+            guard let clientId = authenticatedClients.first,
+                  let connection = clients[clientId] else {
+                return false
+            }
+            let payload: [String: Any] = [
+                "type": "alarm.dismiss"
+            ]
+            send(payload, to: connection)
+            return true
+        }
+    }
+
     private func accept(_ connection: NWConnection) {
         let id = UUID()
         clients[id] = connection
@@ -214,6 +231,15 @@ final class WebSocketServer {
                 let device = object["device"] as? String ?? "Unknown device"
                 let appVersion = object["appVersion"] as? String ?? "unknown"
                 onClientAuthenticated?(device, appVersion)
+            } else if canAdoptIncomingToken(token) {
+                onTokenAdopted?(token)
+                authenticatedClients.insert(clientId)
+                lastSeenByClient[clientId] = Date()
+                notifyAuthenticatedClientCountChanged()
+                send(["type": "auth.ok"], to: connection)
+                let device = object["device"] as? String ?? "Unknown device"
+                let appVersion = object["appVersion"] as? String ?? "unknown"
+                onClientAuthenticated?(device, appVersion)
             } else {
                 send(["type": "auth.fail", "reason": "invalid token"], to: connection)
                 dropClient(clientId)
@@ -262,6 +288,18 @@ final class WebSocketServer {
                 name: resolvedName
             )
             onIncomingCall?(callEvent)
+        case "alarm.incoming":
+            let id = object["id"] as? String ?? UUID().uuidString
+            let timestampMs = object["timestamp"] as? Double ?? Date().timeIntervalSince1970 * 1000
+            let label = (object["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "알람"
+            let time = (object["time"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let alarmEvent = AlarmEvent(
+                id: id,
+                timestamp: Date(timeIntervalSince1970: timestampMs / 1000),
+                label: label,
+                time: time
+            )
+            onIncomingAlarm?(alarmEvent)
         case "ping":
             send(["type": "pong"], to: connection)
         case "sms.reply.result":
@@ -274,6 +312,10 @@ final class WebSocketServer {
             let success = object["success"] as? Bool ?? false
             let reason = object["reason"] as? String
             onReplySmsResult?(clientMsgId, success, reason)
+        case "alarm.dismiss.result":
+            let success = object["success"] as? Bool ?? false
+            let reason = object["reason"] as? String
+            onAlarmDismissResult?(success, reason)
         default:
             return
         }
@@ -307,6 +349,14 @@ final class WebSocketServer {
 
     private func notifyAuthenticatedClientCountChanged() {
         onAuthenticatedClientCountChanged?(authenticatedClients.count)
+    }
+
+    private func canAdoptIncomingToken(_ token: String) -> Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.count < 16 {
+            return false
+        }
+        return authenticatedClients.isEmpty
     }
 
     private func startStaleClientSweepIfNeeded() {

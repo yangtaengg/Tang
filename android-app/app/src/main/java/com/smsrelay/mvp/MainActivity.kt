@@ -16,22 +16,25 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.tabs.TabLayoutMediator
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
-import com.smsrelay.mvp.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var binding: ActivityMainBinding
     private lateinit var pairingStore: PairingStore
     private lateinit var onboardingPagerAdapter: OnboardingPagerAdapter
+    private var notificationAccessDialogShown = false
+    private var batteryOptimizationDialogShown = false
     private val authStateListener: (Boolean) -> Unit = {
         runOnUiThread {
             if (isFinishing || isDestroyed) {
                 return@runOnUiThread
             }
             renderState()
+            if (hasPendingPermissionStep()) {
+                pauseEmbeddedScanner()
+                return@runOnUiThread
+            }
             checkConnectionStateAndShowQrScanner()
         }
     }
@@ -65,6 +68,7 @@ class MainActivity : AppCompatActivity() {
             if (granted) {
                 PhoneStateCallMonitor.start(this)
                 Toast.makeText(this, "Incoming call alerts enabled.", Toast.LENGTH_SHORT).show()
+                runSequentialPermissionFlow()
             } else {
                 showPermissionDeniedDialog(
                     title = getString(R.string.phone_state_permission_required),
@@ -79,6 +83,7 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 Toast.makeText(this, "SMS sending permission granted.", Toast.LENGTH_SHORT).show()
+                runSequentialPermissionFlow()
             } else {
                 Toast.makeText(
                     this,
@@ -110,13 +115,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        applySystemInsets()
 
         pairingStore = PairingStore(this)
         RelayWebSocketClient.initialize(this)
-        ensurePhoneStatePermission()
+        RelayForegroundService.start(this)
 
         onboardingPagerAdapter = OnboardingPagerAdapter(
             onOpenNotificationAccess = {
@@ -150,18 +152,9 @@ class MainActivity : AppCompatActivity() {
                 BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
             }
         )
-        binding.stepPager.adapter = onboardingPagerAdapter
-        TabLayoutMediator(binding.stepTabs, binding.stepPager) { tab, position ->
-            tab.text = when (position) {
-                0 -> "Alerts"
-                1 -> "SMS"
-                2 -> "Pair"
-                else -> "Battery"
-            }
-        }.attach()
     }
 
-    private fun applySystemInsets(root: View = binding.root) {
+    private fun applySystemInsets(root: View) {
         val baseLeft = root.paddingLeft
         val baseTop = root.paddingTop
         val baseRight = root.paddingRight
@@ -182,10 +175,91 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        RelayForegroundService.start(this)
+        val notificationEnabled = NotificationAccessUtil.isEnabled(this)
+        if (notificationEnabled) {
+            notificationAccessDialogShown = false
+        }
+        if (BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
+            batteryOptimizationDialogShown = false
+        }
+        val permissionFlowActive = runSequentialPermissionFlow()
         renderState()
-        PhoneStateCallMonitor.start(this)
         RelayWebSocketClient.connectIfNeeded()
-        checkConnectionStateAndShowQrScanner()
+        if (!permissionFlowActive) {
+            PhoneStateCallMonitor.start(this)
+            checkConnectionStateAndShowQrScanner()
+        } else {
+            pauseEmbeddedScanner()
+        }
+    }
+
+    private fun runSequentialPermissionFlow(): Boolean {
+        if (!NotificationAccessUtil.isEnabled(this)) {
+            promptNotificationAccessIfNeeded()
+            return true
+        }
+        if (!PermissionHelper.hasPhoneStatePermission(this)) {
+            triggerPhoneStatePermissionRequest()
+            return true
+        }
+        if (!PermissionHelper.hasSendSmsPermission(this)) {
+            requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
+            return true
+        }
+        if (!BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
+            promptBatteryOptimizationIfNeeded()
+            return true
+        }
+        return false
+    }
+
+    private fun hasPendingPermissionStep(): Boolean {
+        return !NotificationAccessUtil.isEnabled(this) ||
+            !PermissionHelper.hasPhoneStatePermission(this) ||
+            !PermissionHelper.hasSendSmsPermission(this) ||
+            !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
+    }
+
+    private fun promptNotificationAccessIfNeeded() {
+        if (notificationAccessDialogShown || isFinishing || isDestroyed) {
+            return
+        }
+        notificationAccessDialogShown = true
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Notification access required")
+            .setMessage("To relay SMS/call/alarm to Mac, enable notification access for SMS Relay.")
+            .setCancelable(false)
+            .setPositiveButton("Open settings") { _, _ ->
+                startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                notificationAccessDialogShown = false
+            }
+            .setNegativeButton("Later") { _, _ ->
+                notificationAccessDialogShown = false
+            }
+            .show()
+    }
+
+    private fun promptBatteryOptimizationIfNeeded() {
+        if (batteryOptimizationDialogShown || isFinishing || isDestroyed) {
+            return
+        }
+        batteryOptimizationDialogShown = true
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Battery optimization")
+            .setMessage("Disable battery optimization for SMS Relay to keep background relay stable.")
+            .setCancelable(false)
+            .setPositiveButton("Open settings") { _, _ ->
+                val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
+                if (!launched) {
+                    BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
+                }
+                batteryOptimizationDialogShown = false
+            }
+            .setNegativeButton("Later") { _, _ ->
+                batteryOptimizationDialogShown = false
+            }
+            .show()
     }
 
     override fun onPause() {
@@ -285,15 +359,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun ensurePhoneStatePermission() {
-        if (PermissionHelper.hasPhoneStatePermission(this)) {
-            PhoneStateCallMonitor.start(this)
+    private fun triggerCameraPermissionRequest() {
+        if (hasPendingPermissionStep()) {
             return
         }
-        triggerPhoneStatePermissionRequest()
-    }
-
-    private fun triggerCameraPermissionRequest() {
         if (hasCameraPermission()) {
             startEmbeddedScanner()
             return
@@ -306,6 +375,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkConnectionStateAndShowQrScanner() {
+        if (hasPendingPermissionStep()) {
+            pauseEmbeddedScanner()
+            return
+        }
         val pairing = pairingStore.load()
         val pairingConnected = pairing != null && RelayWebSocketClient.isAuthenticated()
 

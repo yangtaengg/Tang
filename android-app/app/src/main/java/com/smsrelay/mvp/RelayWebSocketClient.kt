@@ -3,7 +3,6 @@ package com.smsrelay.mvp
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
-import android.util.Log
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -24,7 +23,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 object RelayWebSocketClient {
-    private const val TAG = "RelayWebSocketClient"
     private const val CLOSE_NORMAL = 1000
     private const val SUBNET_SCAN_PORT_TIMEOUT_MS = 120
     private const val DISCOVERY_RETRY_MIN_INTERVAL_MS = 8_000L
@@ -44,6 +42,7 @@ object RelayWebSocketClient {
     private var lastDiscoveryAttemptMs = 0L
     private val smsQueue = ArrayDeque<RelaySmsEvent>()
     private val callQueue = ArrayDeque<RelayCallEvent>()
+    private val alarmQueue = ArrayDeque<RelayAlarmEvent>()
     private const val REPLY_SMS_RESULT_TTL_MS = 10 * 60 * 1000L
     private const val HEARTBEAT_INTERVAL_SECONDS = 20L
     private val recentReplySmsResults = LinkedHashMap<String, CachedReplySmsResult>(128, 0.75f, true)
@@ -67,8 +66,14 @@ object RelayWebSocketClient {
 
     @Synchronized
     fun connectIfNeeded() {
-        val context = appContext ?: return
-        val payload = PairingStore(context).load() ?: return
+        val context = appContext
+        if (context == null) {
+            return
+        }
+        val payload = PairingStore(context).load()
+        if (payload == null) {
+            return
+        }
         if (socket != null) {
             return
         }
@@ -81,14 +86,12 @@ object RelayWebSocketClient {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 attempt = 0
                 updateAuthenticated(false)
-                Log.i(TAG, "WebSocket opened: ${payload.url}")
                 val auth = JSONObject()
                     .put("type", "auth")
                     .put("token", payload.pairingToken)
                     .put("device", Build.MODEL)
                     .put("appVersion", "0.1.0")
                 webSocket.send(auth.toString())
-                Log.i(TAG, "Auth message sent")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -98,13 +101,11 @@ object RelayWebSocketClient {
                     "auth.ok" -> {
                         updateAuthenticated(true)
                         startHeartbeatLocked()
-                        Log.i(TAG, "Auth acknowledged by server")
                         flushQueue()
                     }
                     "auth.fail" -> {
                         updateAuthenticated(false)
                         stopHeartbeatLocked()
-                        Log.w(TAG, "Auth rejected by server")
                         closeAndReset()
                     }
                     "sms.reply" -> {
@@ -125,7 +126,6 @@ object RelayWebSocketClient {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closed: $code / $reason")
                 updateAuthenticated(false)
                 stopHeartbeatLocked()
                 socket = null
@@ -133,7 +133,6 @@ object RelayWebSocketClient {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.w(TAG, "WebSocket failure: ${t.message}")
                 updateAuthenticated(false)
                 stopHeartbeatLocked()
                 socket = null
@@ -150,6 +149,7 @@ object RelayWebSocketClient {
         closeAndReset()
         smsQueue.clear()
         callQueue.clear()
+        alarmQueue.clear()
         QuickReplyStore.clear()
     }
 
@@ -186,6 +186,10 @@ object RelayWebSocketClient {
     fun enqueueIncomingCall(event: RelayCallEvent) {
         enqueueWithLimit(callQueue, event, 30)
     }
+    @Synchronized
+    fun enqueueIncomingAlarm(event: RelayAlarmEvent) {
+        enqueueWithLimit(alarmQueue, event, 50)
+    }
 
     private fun <T> enqueueWithLimit(queue: ArrayDeque<T>, event: T, maxSize: Int) {
         if (queue.size >= maxSize) {
@@ -206,6 +210,7 @@ object RelayWebSocketClient {
         }
         flushSmsQueue(webSocket)
         flushCallQueue(webSocket)
+        flushAlarmQueue(webSocket)
     }
 
     private fun flushSmsQueue(webSocket: WebSocket) {
@@ -220,6 +225,14 @@ object RelayWebSocketClient {
         while (callQueue.isNotEmpty()) {
             val event = callQueue.removeFirst()
             val payload = buildCallPayload(event)
+            webSocket.send(payload.toString())
+        }
+    }
+
+    private fun flushAlarmQueue(webSocket: WebSocket) {
+        while (alarmQueue.isNotEmpty()) {
+            val event = alarmQueue.removeFirst()
+            val payload = buildAlarmPayload(event)
             webSocket.send(payload.toString())
         }
     }
@@ -245,6 +258,15 @@ object RelayWebSocketClient {
             .put("timestamp", event.timestamp)
             .put("from", event.from)
         event.name?.let { payload.put("name", it) }
+        return payload
+    }
+    private fun buildAlarmPayload(event: RelayAlarmEvent): JSONObject {
+        val payload = JSONObject()
+            .put("type", "alarm.incoming")
+            .put("id", event.id)
+            .put("timestamp", event.timestamp)
+            .put("label", event.label)
+            .put("time", event.time)
         return payload
     }
 
@@ -283,11 +305,9 @@ object RelayWebSocketClient {
         }
         if (result.isSuccess) {
             sendReplyResult(replyKey, success = true, reason = null)
-            Log.i(TAG, "Quick reply sent for key=$replyKey")
         } else {
             val reason = result.exceptionOrNull()?.message ?: "quick reply failed"
             sendReplyResult(replyKey, success = false, reason = reason)
-            Log.w(TAG, "Quick reply failed for key=$replyKey: $reason")
         }
     }
 
@@ -298,7 +318,6 @@ object RelayWebSocketClient {
         val sourcePackage = payload.optString("sourcePackage")
         val conversationId = payload.optString("conversation_id")
         val clientMsgId = payload.optString("client_msg_id")
-        Log.i(TAG, "reply_sms received: to='${to.take(32)}' conversation='${conversationId.take(32)}' sourcePackage='$sourcePackage'")
         if (body.isBlank() || clientMsgId.isBlank()) {
             sendReplySmsResult(clientMsgId, success = false, reason = "invalid payload")
             return
@@ -330,11 +349,6 @@ object RelayWebSocketClient {
         ) { success, reason ->
             cacheReplySmsResult(clientMsgId, success, reason)
             sendReplySmsResult(clientMsgId, success, reason)
-            if (success) {
-                Log.i(TAG, "SMS send succeeded for client_msg_id=$clientMsgId")
-            } else {
-                Log.w(TAG, "SMS send failed for client_msg_id=$clientMsgId: $reason")
-            }
         }
 
         if (sendResult.isFailure) {
@@ -360,12 +374,7 @@ object RelayWebSocketClient {
     @Synchronized
     private fun handleCallHangUpCommand() {
         val result = SmsNotificationListenerService.hangUpIncomingCall()
-        if (result.isSuccess) {
-            Log.i(TAG, "Call hang-up action sent")
-        } else {
-            val reason = result.exceptionOrNull()?.message ?: "unknown"
-            Log.w(TAG, "Call hang-up failed: $reason")
-        }
+        result.getOrNull()
     }
 
     @Synchronized
@@ -476,7 +485,6 @@ object RelayWebSocketClient {
         val path = if (uri.path.isNullOrBlank() || uri.path == "/") "/ws" else uri.path
         val updatedUrl = URI(uri.scheme ?: "ws", uri.userInfo, discovered, port, path, uri.query, uri.fragment).toString()
         store.save(payload.copy(url = updatedUrl))
-        Log.i(TAG, "Recovered pairing host on current Wi-Fi: $host -> $discovered:$port")
     }
 
     private fun discoverHostOnWifiSubnet(context: Context, port: Int): String? {

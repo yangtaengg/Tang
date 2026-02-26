@@ -39,6 +39,7 @@
         android:textAppearance="@style/TangBodyText" />
 
     <LinearLayout
+        android:id="@+id/manualPairPinRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
@@ -128,6 +129,16 @@
             android:textSize="20sp"
             android:textStyle="bold" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/manualPairErrorText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:textColor="@color/tang_error"
+        android:textSize="13sp"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/manualPairConnectButton"

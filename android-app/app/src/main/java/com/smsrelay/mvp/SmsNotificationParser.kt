@@ -12,16 +12,22 @@ object SmsNotificationParser {
     private val allowedPackages = setOf(
         "com.samsung.android.messaging",
         "com.sec.android.app.messaging",
+        "com.samsung.android.apps.messaging",
         "com.google.android.apps.messaging",
         "com.android.messaging"
     )
 
     fun parse(sbn: StatusBarNotification, fallbackReplyKey: String? = null): RelaySmsEvent? {
-        if (!allowedPackages.contains(sbn.packageName)) {
+        val category = sbn.notification.category.orEmpty()
+        val precomputedReplyKey = QuickReplyStore.replyKeyIfAvailable(sbn) ?: fallbackReplyKey
+        val fromAllowedPackage = allowedPackages.contains(sbn.packageName)
+        val looksLikeMessageCategory = category == Notification.CATEGORY_MESSAGE
+        val hasReplyCapability = !precomputedReplyKey.isNullOrBlank()
+        if (!fromAllowedPackage && !looksLikeMessageCategory && !hasReplyCapability) {
             return null
         }
 
-        val replyKey = QuickReplyStore.replyKeyIfAvailable(sbn) ?: fallbackReplyKey
+        val replyKey = precomputedReplyKey
         val isGroupSummary = (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0
         if (isGroupSummary && replyKey == null) {
             return null
@@ -44,12 +50,11 @@ object SmsNotificationParser {
                 ?: extractPhoneCandidate(fallbackFrom)
                 ?: extractPhoneCandidate(extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty())
         )
-        if (body.isBlank()) {
-            return null
-        }
-
-        if (isHiddenSensitiveContent(body) || isGenericOpenMessagesPrompt(body)) {
-            return null
+        val resolvedBody = when {
+            body.isNotBlank() && !isHiddenSensitiveContent(body) && !isGenericOpenMessagesPrompt(body) -> body
+            fallbackBody.isNotBlank() && !isHiddenSensitiveContent(fallbackBody) && !isGenericOpenMessagesPrompt(fallbackBody) -> fallbackBody
+            isGroupSummary -> "New message received"
+            else -> "New message"
         }
 
         val conversationKey = extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
@@ -63,7 +68,7 @@ object SmsNotificationParser {
             timestamp = messaging?.timestamp ?: sbn.postTime,
             from = sender.ifBlank { "Unknown" },
             fromPhone = senderPhone,
-            body = body,
+            body = resolvedBody,
             sourcePackage = sbn.packageName,
             conversationKey = conversationKey,
             replyKey = replyKey

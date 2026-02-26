@@ -21,6 +21,13 @@ object NotificationDeduper {
         return checkDuplicate(key, now)
     }
 
+    @Synchronized
+    fun isDuplicate(event: RelayAlarmEvent): Boolean {
+        val now = System.currentTimeMillis()
+        val key = buildAlarmKey(event)
+        return checkDuplicate(key, now)
+    }
+
     private fun checkDuplicate(key: String, now: Long): Boolean {
         cleanup(now)
         val roundedTs = (now / 5_000L) * 5_000L
@@ -52,6 +59,14 @@ object NotificationDeduper {
             "call",
             event.from,
             event.name ?: "no-name"
+        ).joinToString("|")
+    }
+
+    private fun buildAlarmKey(event: RelayAlarmEvent): String {
+        return listOf(
+            "alarm",
+            event.label,
+            event.time
         ).joinToString("|")
     }
 

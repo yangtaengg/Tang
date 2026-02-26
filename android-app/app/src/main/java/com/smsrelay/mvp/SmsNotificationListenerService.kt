@@ -2,6 +2,7 @@ package com.smsrelay.mvp
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.content.ComponentName
 
 class SmsNotificationListenerService : NotificationListenerService() {
     companion object {
@@ -30,6 +31,11 @@ class SmsNotificationListenerService : NotificationListenerService() {
         RelayWebSocketClient.connectIfNeeded()
     }
 
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        requestRebind(ComponentName(this, SmsNotificationListenerService::class.java))
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         QuickReplyStore.updateFromNotification(sbn)
         val active = activeNotifications ?: emptyArray()
@@ -38,6 +44,11 @@ class SmsNotificationListenerService : NotificationListenerService() {
         val callEvent = CallNotificationParser.parse(sbn)
         if (callEvent != null && !NotificationDeduper.isDuplicate(callEvent)) {
             RelayWebSocketClient.enqueueIncomingCall(callEvent)
+        }
+
+        val alarmEvent = AlarmNotificationParser.parse(sbn)
+        if (alarmEvent != null && !NotificationDeduper.isDuplicate(alarmEvent)) {
+            RelayWebSocketClient.enqueueIncomingAlarm(alarmEvent)
         }
 
         val fallbackReplyKey = QuickReplyStore.fallbackReplyKeyFor(sbn, active)

@@ -26,6 +26,16 @@ Client -> Server
 {"type":"sms.notification","id":"<uuid>","timestamp":1760000000000,"from":"Alice","body":"Hello","sourcePackage":"com.google.android.apps.messaging"}
 ```
 
+```json
+{"type":"alarm.incoming","id":"<uuid>","timestamp":1760000000000,"label":"Wake up","time":"07:00"}
+```
+
+```json
+{"type":"call.incoming","id":"<uuid>","timestamp":1760000000000,"from":"Alice","name":"Alice Smith"}
+```
+{"type":"sms.notification","id":"<uuid>","timestamp":1760000000000,"from":"Alice","body":"Hello","sourcePackage":"com.google.android.apps.messaging"}
+```
+
 Server -> Client
 
 ```json

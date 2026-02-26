@@ -25,10 +25,14 @@ object CallNotificationParser {
         val fromKnownDialer = knownDialerPackages.contains(sbn.packageName)
         val isCallCategory = category == Notification.CATEGORY_CALL
         val looksIncomingCall = isIncomingCallLabel(title) || isIncomingCallLabel(text) || isIncomingCallLabel(subText)
-        if (!looksIncomingCall) {
+        if (!fromKnownDialer && !isCallCategory) {
             return null
         }
-        if (!fromKnownDialer && !isCallCategory) {
+        if (isMissedCallLabel(title) || isMissedCallLabel(text) || isMissedCallLabel(subText)) {
+            return null
+        }
+        val isOngoing = (notification.flags and Notification.FLAG_ONGOING_EVENT) != 0
+        if (!looksIncomingCall && !isOngoing) {
             return null
         }
 
@@ -85,5 +89,12 @@ object CallNotificationParser {
         return normalized.contains("incoming call") ||
             normalized.contains("수신 전화") ||
             normalized.contains("전화 수신")
+    }
+
+    private fun isMissedCallLabel(text: String): Boolean {
+        val normalized = text.lowercase()
+        return normalized.contains("missed call") ||
+            normalized.contains("부재중") ||
+            normalized.contains("놓친 전화")
     }
 }

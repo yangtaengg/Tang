@@ -6,6 +6,7 @@ import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
+    private static let fallbackTokenDefaultsKey = "pairing.token.fallback"
     @Published var serverState: String = "stopped"
     @Published private(set) var pairingHost: String = LocalNetworkInfo.defaultIPv4()
     @Published var pairingPort: UInt16 = 8765
@@ -53,10 +54,10 @@ final class AppState: ObservableObject {
 
     init() {
         let initialPort: UInt16 = 8765
-        let existing = KeychainStore.loadToken()
+        let existing = Self.loadPersistedToken()
         token = existing ?? TokenFactory.randomBase64Token()
         if existing == nil {
-            try? KeychainStore.saveToken(token)
+            Self.persistToken(token)
         }
 
         pairingPort = initialPort
@@ -79,12 +80,19 @@ final class AppState: ObservableObject {
                 self?.notifyIncomingCall(call)
             }
         }
+        server.onIncomingAlarm = { [weak self] alarm in
+            Task { @MainActor in
+                self?.notifyIncomingAlarm(alarm)
+            }
+        }
         server.onReplyResult = { [weak self] _, success, reason in
             Task { @MainActor in
                 if success {
                     self?.replyStatusText = "Reply sent"
+                    self?.showActionToast(title: "문자 답장", body: "전송 완료")
                 } else {
                     self?.replyStatusText = reason ?? "Reply failed"
+                    self?.showActionToast(title: "문자 답장", body: reason ?? "전송 실패")
                 }
             }
         }
@@ -98,8 +106,19 @@ final class AppState: ObservableObject {
                 self?.pendingReplySmsClientMsgId = nil
                 if success {
                     self?.replyStatusText = "Success!"
+                    self?.showActionToast(title: "문자 답장", body: "전송 완료")
                 } else {
                     self?.replyStatusText = reason ?? "SMS send failed"
+                    self?.showActionToast(title: "문자 답장", body: reason ?? "전송 실패")
+                }
+            }
+        }
+        server.onAlarmDismissResult = { [weak self] success, reason in
+            Task { @MainActor in
+                if success {
+                    self?.showActionToast(title: "알람", body: "알람을 종료했습니다")
+                } else {
+                    self?.showActionToast(title: "알람", body: reason ?? "알람 종료 실패")
                 }
             }
         }
@@ -119,6 +138,17 @@ final class AppState: ObservableObject {
                 }
             }
         }
+        server.onTokenAdopted = { [weak self] adoptedToken in
+            Task { @MainActor in
+                guard let self else { return }
+                self.token = adoptedToken
+                Self.persistToken(adoptedToken)
+                self.pairingCode = Self.makePairingCode(from: adoptedToken)
+                self.server.updateToken(adoptedToken)
+                self.server.updatePairingCode(self.pairingCode)
+                self.refreshPairingQR()
+            }
+        }
 
         server.start()
         refreshPairingQR()
@@ -126,13 +156,30 @@ final class AppState: ObservableObject {
 
     func regenerateToken() {
         token = TokenFactory.randomBase64Token()
-        try? KeychainStore.saveToken(token)
+        Self.persistToken(token)
         server.updateToken(token)
         pairingCode = Self.makePairingCode(from: token)
         server.updatePairingCode(pairingCode)
         pairedDeviceName = nil
         pairedAppVersion = nil
         refreshPairingQR()
+    }
+
+    private static func loadPersistedToken() -> String? {
+        if let keychainToken = KeychainStore.loadToken(), !keychainToken.isEmpty {
+            UserDefaults.standard.set(keychainToken, forKey: Self.fallbackTokenDefaultsKey)
+            return keychainToken
+        }
+        let fallback = UserDefaults.standard.string(forKey: Self.fallbackTokenDefaultsKey)
+        return (fallback?.isEmpty == false) ? fallback : nil
+    }
+
+    private static func persistToken(_ value: String) {
+        UserDefaults.standard.set(value, forKey: Self.fallbackTokenDefaultsKey)
+        do {
+            try KeychainStore.saveToken(value)
+        } catch {
+        }
     }
 
     private static func makePairingCode(from token: String) -> String {
@@ -254,6 +301,7 @@ final class AppState: ObservableObject {
             replyStatusText = "Sending..."
         } else {
             replyStatusText = "No connected Android device"
+            showActionToast(title: "문자 답장", body: "연결된 안드로이드 기기가 없습니다")
         }
     }
 
@@ -289,6 +337,7 @@ final class AppState: ObservableObject {
         } else {
             pendingReplySmsClientMsgId = nil
             replyStatusText = "No connected Android device"
+            showActionToast(title: "문자 답장", body: "연결된 안드로이드 기기가 없습니다")
         }
     }
 
@@ -343,15 +392,59 @@ final class AppState: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
+    private func notifyIncomingAlarm(_ alarm: AlarmEvent) {
+        let title = "알람"
+        let body = alarm.time.isEmpty ? alarm.label : "\(alarm.label) - \(alarm.time)"
+        playAlertSound(.alarm)
+
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: "alarm-\(alarm.id)",
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        } else {
+            showFallbackAlarmNotification(
+                title: title,
+                body: body,
+                onDismiss: { [weak self] in
+                    self?.dismissIncomingAlarm()
+                },
+                onClose: {}
+            )
+        }
+    }
+
+    private func dismissIncomingAlarm() {
+        let sent = server.sendAlarmDismiss()
+        if !sent {
+            showActionToast(title: "알람", body: "연결된 안드로이드 기기가 없습니다")
+        }
+    }
+
     private enum AlertSoundKind {
         case sms
         case call
+        case alarm
     }
 
     private func playAlertSound(_ kind: AlertSoundKind) {
-        let customName = kind == .call ? "iphone_ringtone" : "iphone_sms"
-        if let custom = NSSound(named: customName) {
-            custom.play()
+        let customName: String?
+        switch kind {
+        case .call:
+            customName = "iphone_ringtone"
+        case .alarm:
+            customName = "iphone_ringtone"
+        default:
+            customName = "iphone_sms"
+        }
+        if let custom = customName, let sound = NSSound(named: custom) {
+            sound.play()
             return
         }
 
@@ -464,6 +557,84 @@ final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
             guard let panel else { return }
             self?.closeFallbackPanelIfActive(panel)
+        }
+    }
+    private func showFallbackAlarmNotification(
+        title: String,
+        body: String,
+        onDismiss: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        fallbackNotificationWindow?.close()
+        fallbackNotificationMessage = nil
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 120),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.level = .statusBar
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+
+        panel.contentView = NSHostingView(rootView: FallbackAlarmToastView(
+            title: title,
+            messageText: body,
+            onDismiss: onDismiss,
+            onClose: onClose
+        ))
+
+        if let screen = preferredNotificationScreen() {
+            let visible = screen.visibleFrame
+            var frame = panel.frame
+            frame.origin = NSPoint(
+                x: visible.maxX - frame.width,
+                y: visible.maxY - frame.height
+            )
+            frame = panel.constrainFrameRect(frame, to: screen)
+            panel.setFrame(frame, display: false)
+        }
+
+        panel.orderFrontRegardless()
+        fallbackNotificationWindow = panel
+        installFallbackDismissMonitor()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + fallbackToastDuration) { [weak self, weak panel] in
+            guard let panel else { return }
+            self?.closeFallbackPanelIfActive(panel)
+        }
+    }
+
+    private func showActionToast(title: String, body: String) {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 92),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.level = .statusBar
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        panel.contentView = NSHostingView(rootView: ActionToastView(title: title, messageText: body))
+
+        if let screen = preferredNotificationScreen() {
+            let visible = screen.visibleFrame
+            var frame = panel.frame
+            frame.origin = NSPoint(x: visible.maxX - frame.width, y: visible.maxY - frame.height - 130)
+            frame = panel.constrainFrameRect(frame, to: screen)
+            panel.setFrame(frame, display: false)
+        }
+
+        panel.orderFrontRegardless()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            panel.close()
         }
     }
 
@@ -736,6 +907,92 @@ private struct FallbackCallToastView: View {
                         .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
+        )
+    }
+}
+
+private struct FallbackAlarmToastView: View {
+    let title: String
+    let messageText: String
+    let onDismiss: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.orange.opacity(0.85))
+                    .frame(width: 7, height: 7)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+            }
+
+            Text(messageText)
+                .font(.system(size: 12))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            HStack(spacing: 8) {
+                Button("Snooze") {
+                    onClose()
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .controlSize(.regular)
+                .buttonStyle(.borderedProminent)
+
+                Spacer()
+                Button("Dismiss") {
+                    onDismiss()
+                    onClose()
+                }
+                    .font(.system(size: 12, weight: .semibold))
+                    .controlSize(.regular)
+                    .buttonStyle(.bordered)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(width: 360, height: 120)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.ultraThinMaterial)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.14), radius: 16, x: 0, y: 9)
+        )
+    }
+}
+
+private struct ActionToastView: View {
+    let title: String
+    let messageText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+            Text(messageText)
+                .font(.system(size: 12))
+                .lineLimit(2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(width: 300, height: 92, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                )
         )
     }
 }

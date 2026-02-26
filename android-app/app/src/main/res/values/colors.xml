@@ -8,6 +8,7 @@
     <color name="tang_primary">#2F6BFA</color>
     <color name="tang_on_primary">#FFFFFF</color>
     <color name="tang_success">#1FA873</color>
+    <color name="tang_error">#E5484D</color>
     <color name="tang_title">#1F2937</color>
     <color name="tang_body">#5F6B7A</color>
 </resources>

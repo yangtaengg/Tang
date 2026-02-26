@@ -39,6 +39,12 @@ struct IncomingCallEvent: Identifiable, Hashable {
         return formattedFrom
     }
 }
+struct AlarmEvent: Identifiable, Hashable {
+    let id: String
+    let timestamp: Date
+    let label: String
+    let time: String
+}
 
 struct PairingPayload: Codable {
     let version: Int

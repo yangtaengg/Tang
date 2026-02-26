@@ -14,7 +14,7 @@
     <string name="manual_pair_connect">Pair via 6-digit PIN</string>
     <string name="manual_pair_dialog_title">Connect with 6-digit PIN</string>
     <string name="manual_pair_screen_title">Enter 6-digit PIN</string>
-    <string name="manual_pair_dialog_subtitle">Enter the 6-digit PIN shown in the macOS app. The Mac is auto-detected on current Wi-Fi.</string>
+    <string name="manual_pair_dialog_subtitle">The Mac will be auto-detected on current Wi-Fi.</string>
     <string name="manual_pair_host_label">Mac address</string>
     <string name="manual_pair_host_hint">e.g. 192.168.0.12 or ws://192.168.0.12:8765/ws</string>
     <string name="manual_pair_host_required">Could not find Mac on current Wi-Fi. Enter Mac IP/host manually.</string>
@@ -22,7 +22,9 @@
     <string name="manual_pair_cancel">Cancel</string>
     <string name="manual_pair_back">Back</string>
     <string name="manual_pair_confirm">Connect</string>
-    <string name="manual_pair_finding_mac">Finding Mac...</string>
+    <string name="manual_pair_finding_mac">Connecting Mac...</string>
+    <string name="manual_pair_invalid_code">Enter all 6 digits.</string>
+    <string name="manual_pair_auth_failed">PIN verification failed. Please check the 6-digit code and try again.</string>
 
     <string name="connected_status">Connected</string>
     <string name="connected_to_mac">Connected to Mac</string>
@@ -40,4 +42,7 @@
     <string name="permission_exit">Exit</string>
     <string name="phone_state_permission_required">Phone state permission is required for call alerts</string>
     <string name="phone_state_permission_denied">Phone state permission was denied. This app cannot show incoming call alerts without this permission. Please grant the permission to continue.</string>
+
+    <string name="fg_service_title">Tang is connected</string>
+    <string name="fg_service_text">Keeping relay connection alive in background</string>
 </resources>
