@@ -40,7 +40,7 @@ Release builds use R8/resource shrinking. A local build is unsigned unless the f
 
 ## Release pipeline
 
-[`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) runs tests, Android lint, release APK/AAB builds, and a macOS release build on pull requests and pushes. A tag matching `v*` additionally:
+[`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) runs tests, Android lint, release APK/AAB builds, and a macOS release build on pull requests and pushes. A manual workflow run signs and uploads the Android AAB to Google Play open testing. A tag matching `v*` additionally:
 
 1. signs Android artifacts with the Play upload key;
 2. uploads the AAB to the Google Play `beta` (open testing) track;
