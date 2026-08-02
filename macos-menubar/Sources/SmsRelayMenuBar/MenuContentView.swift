@@ -43,6 +43,12 @@ struct MenuContentView: View {
                     .foregroundStyle(.orange)
             }
 
+            if let securityError = appState.securityErrorText {
+                Text(securityError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             Divider()
 
             if messageStore.conversationHeads.isEmpty {

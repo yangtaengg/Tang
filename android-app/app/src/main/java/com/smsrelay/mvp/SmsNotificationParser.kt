@@ -85,7 +85,7 @@ object SmsNotificationParser {
     )
 
     private fun parseMessagingStyle(extras: Bundle): ParsedMessaging? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return null
         }
         val parcelables = getMessagingBundleArray(extras) ?: return null

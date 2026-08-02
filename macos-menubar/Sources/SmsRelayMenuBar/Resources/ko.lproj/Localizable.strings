@@ -17,7 +17,8 @@
 
 "pair_device_title" = "기기 페어링";
 "pair_waiting_auth" = "안드로이드 인증 대기 중";
-"pair_code_title" = "6자리 페어 코드";
+"pair_code_title" = "12자리 설정 코드";
+"keychain_unavailable" = "보안 저장소를 사용할 수 없습니다. Keychain 접근이 복구될 때까지 페어링이 비활성화됩니다.";
 "pair_host_autodetect" = "현재 Wi-Fi 네트워크에서 호스트를 자동 감지합니다.";
 "pair_refresh_qr" = "QR 새로고침";
 "pair_regenerate_token" = "토큰 재생성";

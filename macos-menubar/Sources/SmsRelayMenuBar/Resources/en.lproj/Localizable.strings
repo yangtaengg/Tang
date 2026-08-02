@@ -17,7 +17,8 @@
 
 "pair_device_title" = "Pair device";
 "pair_waiting_auth" = "Waiting for Android authentication";
-"pair_code_title" = "6-digit Pair Code";
+"pair_code_title" = "12-character setup code";
+"keychain_unavailable" = "Secure storage is unavailable. Pairing is disabled until Keychain access is restored.";
 "pair_host_autodetect" = "Host is auto-detected from current Wi-Fi network.";
 "pair_refresh_qr" = "Refresh QR";
 "pair_regenerate_token" = "Regenerate token";

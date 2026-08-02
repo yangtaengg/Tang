@@ -47,85 +47,17 @@
         android:orientation="horizontal">
 
         <EditText
-            android:id="@+id/pinDigit1"
-            android:layout_width="44dp"
+            android:id="@+id/manualPairCodeInput"
+            android:layout_width="match_parent"
             android:layout_height="52dp"
             android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
+            android:digits="ABCDEFGHJKLMNPQRSTUVWXYZ23456789-abcdefghjklmnpqrstuvwxyz"
             android:gravity="center"
-            android:imeOptions="actionNext"
-            android:inputType="number"
-            android:maxLength="1"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/pinDigit2"
-            android:layout_width="44dp"
-            android:layout_height="52dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
-            android:gravity="center"
-            android:imeOptions="actionNext"
-            android:inputType="number"
-            android:maxLength="1"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/pinDigit3"
-            android:layout_width="44dp"
-            android:layout_height="52dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
-            android:gravity="center"
-            android:imeOptions="actionNext"
-            android:inputType="number"
-            android:maxLength="1"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/pinDigit4"
-            android:layout_width="44dp"
-            android:layout_height="52dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
-            android:gravity="center"
-            android:imeOptions="actionNext"
-            android:inputType="number"
-            android:maxLength="1"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/pinDigit5"
-            android:layout_width="44dp"
-            android:layout_height="52dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
-            android:gravity="center"
-            android:imeOptions="actionNext"
-            android:inputType="number"
-            android:maxLength="1"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/pinDigit6"
-            android:layout_width="44dp"
-            android:layout_height="52dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pin_digit"
-            android:digits="0123456789"
-            android:gravity="center"
+            android:hint="@string/manual_pair_code_hint"
             android:imeOptions="actionDone"
-            android:inputType="number"
-            android:maxLength="1"
+            android:importantForAutofill="no"
+            android:inputType="textCapCharacters|textNoSuggestions"
+            android:maxLength="14"
             android:textSize="20sp"
             android:textStyle="bold" />
     </LinearLayout>

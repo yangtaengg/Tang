@@ -5,8 +5,6 @@ import android.net.ConnectivityManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputFilter
-import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -15,7 +13,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.widget.doAfterTextChanged
 import java.net.Inet4Address
 import java.net.URI
 import java.net.Socket
@@ -26,11 +23,12 @@ import java.util.concurrent.Executors
 class ManualPairActivity : AppCompatActivity() {
     private companion object {
         const val DEFAULT_WS_PORT = 8765
-        const val AUTH_TIMEOUT_MS = 4_000L
+        const val AUTH_TIMEOUT_MS = 8_000L
+        const val PAIRING_WINDOW_MS = 10 * 60 * 1000L
     }
 
     private lateinit var pairingStore: PairingStore
-    private lateinit var pinInputs: List<EditText>
+    private lateinit var codeInput: EditText
     private lateinit var connectButton: Button
     private lateinit var pinRow: View
     private lateinit var errorText: TextView
@@ -49,62 +47,26 @@ class ManualPairActivity : AppCompatActivity() {
         val root = findViewById<View>(R.id.manualPairRoot)
         applySystemInsets(root)
 
-        pinInputs = listOf(
-            findViewById(R.id.pinDigit1),
-            findViewById(R.id.pinDigit2),
-            findViewById(R.id.pinDigit3),
-            findViewById(R.id.pinDigit4),
-            findViewById(R.id.pinDigit5),
-            findViewById(R.id.pinDigit6)
-        )
+        codeInput = findViewById(R.id.manualPairCodeInput)
         connectButton = findViewById(R.id.manualPairConnectButton)
         pinRow = findViewById(R.id.manualPairPinRow)
         errorText = findViewById(R.id.manualPairErrorText)
-
-        bindPinInputs()
 
         findViewById<View>(R.id.manualPairBackButton).setOnClickListener {
             finish()
         }
         connectButton.setOnClickListener {
-            val code = pinInputs.joinToString(separator = "") { it.text?.toString().orEmpty() }
-            startPairingFlow(code)
+            startPairingFlow(codeInput.text?.toString().orEmpty())
         }
-    }
-
-    private fun bindPinInputs() {
-        pinInputs.forEachIndexed { index, editText ->
-            editText.filters = arrayOf(InputFilter.LengthFilter(1))
-            editText.doAfterTextChanged { text ->
-                clearPinErrorState()
-                if (text?.length == 1 && index < pinInputs.lastIndex) {
-                    pinInputs[index + 1].requestFocus()
-                }
-            }
-            editText.setOnKeyListener { _, keyCode, event ->
-                if (
-                    keyCode == KeyEvent.KEYCODE_DEL &&
-                    event.action == KeyEvent.ACTION_DOWN &&
-                    editText.text.isEmpty() &&
-                    index > 0
-                ) {
-                    pinInputs[index - 1].requestFocus()
-                    pinInputs[index - 1].setSelection(pinInputs[index - 1].text.length)
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-        pinInputs.first().requestFocus()
     }
 
     private fun startPairingFlow(codeRaw: String) {
-        val code = codeRaw.trim().replace(Regex("\\D"), "")
-        if (!code.matches(Regex("\\d{6}"))) {
+        val compact = codeRaw.uppercase().replace(Regex("[^A-Z0-9]"), "")
+        if (!compact.matches(Regex("[A-HJ-NP-Z2-9]{12}"))) {
             showPinError(getString(R.string.manual_pair_invalid_code))
             return
         }
+        val code = compact.chunked(4).joinToString("-")
 
         clearPinErrorState()
         setBusy(true)
@@ -125,13 +87,14 @@ class ManualPairActivity : AppCompatActivity() {
         cleanupAuthWatchers()
         previousPayloadBeforeAttempt = pairingStore.load()
         val payload = QrPayload(
-            version = 1,
+            version = SecureChannel.PROTOCOL_VERSION,
             url = pairingUrl,
             pairingToken = code,
-            expiresAtMs = Long.MAX_VALUE,
+            expiresAtMs = System.currentTimeMillis() + PAIRING_WINDOW_MS,
             deviceName = "Mac"
         )
         pairingStore.save(payload)
+        RelayForegroundService.start(this)
         RelayWebSocketClient.clearConnection()
         RelayWebSocketClient.connectIfNeeded()
 
@@ -163,7 +126,7 @@ class ManualPairActivity : AppCompatActivity() {
 
     private fun setBusy(busy: Boolean) {
         connectButton.isEnabled = !busy
-        pinInputs.forEach { it.isEnabled = !busy }
+        codeInput.isEnabled = !busy
         connectButton.text = if (busy) {
             getString(R.string.manual_pair_finding_mac)
         } else {
@@ -174,10 +137,8 @@ class ManualPairActivity : AppCompatActivity() {
     private fun showPinError(message: String) {
         errorText.text = message
         errorText.visibility = View.VISIBLE
-        pinInputs.forEach {
-            it.background = ContextCompat.getDrawable(this, R.drawable.bg_pin_digit_error)
-            it.setTextColor(ContextCompat.getColor(this, R.color.tang_error))
-        }
+        codeInput.background = ContextCompat.getDrawable(this, R.drawable.bg_pin_digit_error)
+        codeInput.setTextColor(ContextCompat.getColor(this, R.color.tang_error))
         ObjectAnimator.ofFloat(pinRow, View.TRANSLATION_X, 0f, -18f, 18f, -12f, 12f, -6f, 6f, 0f)
             .setDuration(360)
             .start()
@@ -185,24 +146,24 @@ class ManualPairActivity : AppCompatActivity() {
 
     private fun clearPinErrorState() {
         errorText.visibility = View.GONE
-        pinInputs.forEach {
-            it.background = ContextCompat.getDrawable(this, R.drawable.bg_pin_digit)
-            it.setTextColor(ContextCompat.getColor(this, R.color.tang_title))
-        }
+        codeInput.background = ContextCompat.getDrawable(this, R.drawable.bg_pin_digit)
+        codeInput.setTextColor(ContextCompat.getColor(this, R.color.tang_title))
     }
 
     private fun clearPinInputs() {
-        pinInputs.forEach { it.text?.clear() }
-        pinInputs.firstOrNull()?.requestFocus()
+        codeInput.text?.clear()
+        codeInput.requestFocus()
     }
 
     private fun restorePreviousPairing() {
         val previous = previousPayloadBeforeAttempt
         if (previous == null) {
             pairingStore.clear()
+            RelayForegroundService.stop(this)
             return
         }
         pairingStore.save(previous)
+        RelayForegroundService.start(this)
     }
 
     private fun cleanupAuthWatchers() {

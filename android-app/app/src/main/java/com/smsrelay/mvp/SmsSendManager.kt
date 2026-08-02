@@ -6,8 +6,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.telephony.SmsManager
+import androidx.core.content.ContextCompat
 
 object SmsSendManager {
     private const val ACTION_SMS_SENT = "com.smsrelay.mvp.ACTION_SMS_SENT"
@@ -115,12 +115,12 @@ object SmsSendManager {
             return
         }
         val filter = IntentFilter(ACTION_SMS_SENT)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(sentStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            context.registerReceiver(sentStatusReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            context,
+            sentStatusReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         receiverRegistered = true
     }
 

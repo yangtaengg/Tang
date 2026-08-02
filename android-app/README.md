@@ -10,13 +10,15 @@ Used:
 - `INTERNET`
 - `ACCESS_NETWORK_STATE`
 - `CAMERA` (QR pairing)
-- `SEND_SMS` (for direct `reply_sms` sending)
+- `POST_NOTIFICATIONS` and foreground-service permissions (visible relay status)
+- `SEND_SMS` (optional, user-initiated direct `reply_sms` sending)
 
 Not used:
 
 - `READ_SMS`
 - `RECEIVE_SMS`
 - `READ_CALL_LOG`
+- `READ_PHONE_STATE`
 
 ## Supported Source Apps
 
@@ -36,8 +38,8 @@ Only new message notifications are relayed after dedupe.
 
 Prerequisites:
 
-- Android Studio Iguana+ (or newer)
-- Android SDK 35
+- Current Android Studio
+- Android SDK 36
 - JDK 17
 
 Steps:
@@ -53,17 +55,13 @@ Steps:
 3. Tap `Pair via QR Scan` and scan the QR from macOS app.
 4. Keep phone and Mac on same Wi-Fi.
 
-Pairing token is persistent (non-expiring) unless you manually clear pairing or regenerate token on macOS.
+The QR/setup-code credential expires after 10 minutes. After successful pairing, the long-term token is delivered through the encrypted session and persists until pairing is cleared or the Mac token is regenerated.
 
 ## Transport Protocol
 
-Client sends auth first:
+Protocol v2 uses `auth.hello`, a random server challenge, and an HMAC-SHA256 proof. It derives directional keys and sends all later payloads inside AES-256-GCM `secure` frames. See `../shared/protocol.md` for the complete contract.
 
-```json
-{"type":"auth","token":"...","device":"SM-S918N","appVersion":"5"}
-```
-
-After `auth.ok`, client sends events:
+An example decrypted event is:
 
 ```json
 {"type":"sms.notification","id":"uuid","timestamp":1760000000000,"from":"Alice","body":"Hello","sourcePackage":"com.google.android.apps.messaging"}
@@ -99,4 +97,4 @@ Client returns direct SMS send result:
 - Some notifications (for example OTP/privacy-hidden content) may be partially masked by source app or Android system
 - If notification access is disabled, no relay occurs
 - Aggressive device sleep modes can delay reconnect or event forwarding
-- `EncryptedSharedPreferences` is used per requirement; plan migration to DataStore/Tink in production hardening
+- A real Samsung/Google Messages device test is still required before each store release because notification payloads vary by app and OS version.

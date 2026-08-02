@@ -3,9 +3,9 @@ package com.smsrelay.mvp
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
@@ -22,17 +22,10 @@ import com.journeyapps.barcodescanner.DecoratedBarcodeView
 
 class MainActivity : AppCompatActivity() {
     private lateinit var pairingStore: PairingStore
-    private lateinit var onboardingPagerAdapter: OnboardingPagerAdapter
     private var notificationAccessDialogShown = false
-    private var batteryOptimizationDialogShown = false
     private val authStateListener: (Boolean) -> Unit = {
         runOnUiThread {
             if (isFinishing || isDestroyed) {
-                return@runOnUiThread
-            }
-            renderState()
-            if (hasPendingPermissionStep()) {
-                pauseEmbeddedScanner()
                 return@runOnUiThread
             }
             checkConnectionStateAndShowQrScanner()
@@ -58,23 +51,7 @@ class MainActivity : AppCompatActivity() {
                     title = getString(R.string.camera_permission_required),
                     message = getString(R.string.camera_permission_denied),
                     onRetry = { triggerCameraPermissionRequest() },
-                    onExit = { finish() }
-                )
-            }
-        }
-
-    private val requestPhoneStatePermission: ActivityResultLauncher<String> =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                PhoneStateCallMonitor.start(this)
-                Toast.makeText(this, getString(R.string.toast_incoming_call_enabled), Toast.LENGTH_SHORT).show()
-                runSequentialPermissionFlow()
-            } else {
-                showPermissionDeniedDialog(
-                    title = getString(R.string.phone_state_permission_required),
-                    message = getString(R.string.phone_state_permission_denied),
-                    onRetry = { triggerPhoneStatePermissionRequest() },
-                    onExit = { finish() }
+                    onExit = { openManualPairScreen() }
                 )
             }
         }
@@ -83,7 +60,6 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 Toast.makeText(this, getString(R.string.toast_sms_permission_granted), Toast.LENGTH_SHORT).show()
-                runSequentialPermissionFlow()
             } else {
                 Toast.makeText(
                     this,
@@ -91,7 +67,16 @@ class MainActivity : AppCompatActivity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
-            renderState()
+        }
+
+    private val requestStatusNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val message = if (granted) {
+                R.string.toast_status_notifications_granted
+            } else {
+                R.string.toast_status_notifications_denied
+            }
+            Toast.makeText(this, getString(message), Toast.LENGTH_SHORT).show()
         }
 
     private fun handleScannedQr(content: String) {
@@ -99,10 +84,10 @@ class MainActivity : AppCompatActivity() {
         val parsed = pairingStore.parseQrJson(content)
         parsed.onSuccess { payload ->
             pairingStore.save(payload)
+            RelayForegroundService.start(this)
             RelayWebSocketClient.clearConnection()
             RelayWebSocketClient.connectIfNeeded()
             Toast.makeText(this, getString(R.string.toast_paired_with_device, payload.deviceName), Toast.LENGTH_SHORT).show()
-            renderState()
             checkConnectionStateAndShowQrScanner()
         }.onFailure {
             Toast.makeText(this, getString(R.string.qr_scan_invalid), Toast.LENGTH_LONG).show()
@@ -120,38 +105,6 @@ class MainActivity : AppCompatActivity() {
         RelayWebSocketClient.initialize(this)
         RelayForegroundService.start(this)
 
-        onboardingPagerAdapter = OnboardingPagerAdapter(
-            onOpenNotificationAccess = {
-                startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-            },
-            onOpenSamsungNotificationSettings = {
-                openSamsungNotificationContentSettings()
-            },
-            onRequestSmsPermission = {
-                requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
-            },
-            onScanQr = {
-                triggerCameraPermissionRequest()
-            },
-            onManualPair = {
-                openManualPairScreen()
-            },
-            onClearPairing = {
-                pairingStore.clear()
-                RelayWebSocketClient.clearConnection()
-                renderState()
-                Toast.makeText(this, getString(R.string.toast_pairing_cleared), Toast.LENGTH_SHORT).show()
-            },
-            onRequestBatteryExclusion = {
-                val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
-                if (!launched) {
-                    BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
-                }
-            },
-            onOpenBatterySettings = {
-                BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
-            }
-        )
     }
 
     private fun applySystemInsets(root: View) {
@@ -180,45 +133,11 @@ class MainActivity : AppCompatActivity() {
         if (notificationEnabled) {
             notificationAccessDialogShown = false
         }
-        if (BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
-            batteryOptimizationDialogShown = false
-        }
-        val permissionFlowActive = runSequentialPermissionFlow()
-        renderState()
         RelayWebSocketClient.connectIfNeeded()
-        if (!permissionFlowActive) {
-            PhoneStateCallMonitor.start(this)
-            checkConnectionStateAndShowQrScanner()
-        } else {
-            pauseEmbeddedScanner()
-        }
-    }
-
-    private fun runSequentialPermissionFlow(): Boolean {
-        if (!NotificationAccessUtil.isEnabled(this)) {
+        checkConnectionStateAndShowQrScanner()
+        if (!notificationEnabled) {
             promptNotificationAccessIfNeeded()
-            return true
         }
-        if (!PermissionHelper.hasPhoneStatePermission(this)) {
-            triggerPhoneStatePermissionRequest()
-            return true
-        }
-        if (!PermissionHelper.hasSendSmsPermission(this)) {
-            requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
-            return true
-        }
-        if (!BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
-            promptBatteryOptimizationIfNeeded()
-            return true
-        }
-        return false
-    }
-
-    private fun hasPendingPermissionStep(): Boolean {
-        return !NotificationAccessUtil.isEnabled(this) ||
-            !PermissionHelper.hasPhoneStatePermission(this) ||
-            !PermissionHelper.hasSendSmsPermission(this) ||
-            !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
     }
 
     private fun promptNotificationAccessIfNeeded() {
@@ -240,25 +159,18 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun promptBatteryOptimizationIfNeeded() {
-        if (batteryOptimizationDialogShown || isFinishing || isDestroyed) {
+    private fun promptSmsPermission() {
+        if (PermissionHelper.hasSendSmsPermission(this)) {
+            Toast.makeText(this, getString(R.string.toast_sms_permission_granted), Toast.LENGTH_SHORT).show()
             return
         }
-        batteryOptimizationDialogShown = true
         MaterialAlertDialogBuilder(this)
-            .setTitle(getString(R.string.battery_optimization_title))
-            .setMessage(getString(R.string.battery_optimization_message))
-            .setCancelable(false)
-            .setPositiveButton(getString(R.string.open_settings)) { _, _ ->
-                val launched = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(this)
-                if (!launched) {
-                    BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
-                }
-                batteryOptimizationDialogShown = false
+            .setTitle(getString(R.string.sms_permission_disclosure_title))
+            .setMessage(getString(R.string.sms_permission_disclosure_message))
+            .setPositiveButton(getString(R.string.continue_label)) { _, _ ->
+                requestSendSmsPermission.launch(Manifest.permission.SEND_SMS)
             }
-            .setNegativeButton(getString(R.string.later)) { _, _ ->
-                batteryOptimizationDialogShown = false
-            }
+            .setNegativeButton(getString(R.string.later), null)
             .show()
     }
 
@@ -277,92 +189,11 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
 
-    private fun renderState() {
-        val notificationAccess = NotificationAccessUtil.isEnabled(this)
-        val notificationAccessStatus = if (notificationAccess) {
-            getString(R.string.status_notification_access_enabled)
-        } else {
-            getString(R.string.status_notification_access_disabled)
-        }
-
-        val pairing = pairingStore.load()
-        val pairingConnected = pairing != null && RelayWebSocketClient.isAuthenticated()
-        val pairingStatus: String
-        val pairingDetails: String
-        if (pairing == null) {
-            pairingStatus = getString(R.string.status_pairing_not_paired)
-            pairingDetails = getString(R.string.status_pairing_not_paired_details)
-        } else if (pairingConnected) {
-            pairingStatus = getString(R.string.status_pairing_connected)
-            pairingDetails = pairing.deviceName
-        } else {
-            pairingStatus = getString(R.string.status_pairing_token_saved)
-            pairingDetails = getString(R.string.status_pairing_token_saved_details, pairing.deviceName)
-        }
-
-        val excluded = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)
-        val batteryStatus = if (excluded) {
-            getString(R.string.status_battery_optimization_enabled)
-        } else {
-            getString(R.string.status_battery_optimization_disabled)
-        }
-
-        val smsGranted = PermissionHelper.hasSendSmsPermission(this)
-        val smsPermissionStatus = if (smsGranted) {
-            getString(R.string.status_sms_permission_granted)
-        } else {
-            getString(R.string.status_sms_permission_not_granted)
-        }
-
-        onboardingPagerAdapter.updateState(
-            OnboardingUiState(
-                notificationAccessStatus = notificationAccessStatus,
-                smsPermissionStatus = smsPermissionStatus,
-                pairingStatus = pairingStatus,
-                pairingDetails = pairingDetails,
-                batteryStatus = batteryStatus,
-                batteryRequestEnabled = !excluded,
-                notificationAccessGranted = notificationAccess,
-                smsPermissionGranted = smsGranted,
-                batteryExcluded = excluded,
-                pairingConnected = pairingConnected
-            )
-        )
-    }
-
     private fun openManualPairScreen() {
         startActivity(Intent(this, ManualPairActivity::class.java))
     }
 
-    private fun openSamsungNotificationContentSettings() {
-        if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
-            Toast.makeText(this, getString(R.string.toast_samsung_only), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val intents = listOf(
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, "com.samsung.android.messaging"),
-            Intent("android.settings.NOTIFICATION_SETTINGS"),
-            Intent("android.settings.LOCK_SCREEN_SETTINGS")
-        )
-
-        val launched = intents.firstOrNull { intent ->
-            intent.resolveActivity(packageManager) != null
-        }?.let {
-            startActivity(it)
-            true
-        } ?: false
-
-        if (!launched) {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
-        }
-    }
-
     private fun triggerCameraPermissionRequest() {
-        if (hasPendingPermissionStep()) {
-            return
-        }
         if (hasCameraPermission()) {
             startEmbeddedScanner()
             return
@@ -370,15 +201,7 @@ class MainActivity : AppCompatActivity() {
         requestCameraPermission.launch(Manifest.permission.CAMERA)
     }
 
-    private fun triggerPhoneStatePermissionRequest() {
-        requestPhoneStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
-    }
-
     private fun checkConnectionStateAndShowQrScanner() {
-        if (hasPendingPermissionStep()) {
-            pauseEmbeddedScanner()
-            return
-        }
         val pairing = pairingStore.load()
         val pairingConnected = pairing != null && RelayWebSocketClient.isAuthenticated()
 
@@ -393,13 +216,39 @@ class MainActivity : AppCompatActivity() {
                 val statusText = findViewById<android.widget.TextView>(R.id.connectedStatusText)
                 val detailsText = findViewById<android.widget.TextView>(R.id.connectedDetailsText)
                 val disconnectButton = findViewById<android.widget.Button>(R.id.disconnectButton)
+                val notificationAccessButton = findViewById<android.widget.Button>(R.id.connectedNotificationAccessButton)
+                val statusNotificationButton = findViewById<android.widget.Button>(R.id.connectedStatusNotificationButton)
+                val smsPermissionButton = findViewById<android.widget.Button>(R.id.connectedSmsPermissionButton)
+                val batterySettingsButton = findViewById<android.widget.Button>(R.id.connectedBatterySettingsButton)
+                val privacyButton = findViewById<android.widget.Button>(R.id.connectedPrivacyButton)
 
                 statusText.text = getString(R.string.connected_status)
                 detailsText.text = getString(R.string.qr_scan_connected_details, paired.deviceName)
 
+                notificationAccessButton.setOnClickListener {
+                    startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    statusNotificationButton.visibility = View.VISIBLE
+                    statusNotificationButton.setOnClickListener {
+                        requestStatusNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                } else {
+                    statusNotificationButton.visibility = View.GONE
+                }
+                smsPermissionButton.setOnClickListener { promptSmsPermission() }
+                batterySettingsButton.setOnClickListener {
+                    BatteryOptimizationHelper.openBatteryOptimizationSettings(this)
+                }
+                privacyButton.setOnClickListener { openPrivacyPolicy() }
+
                 disconnectButton.setOnClickListener {
                     pairingStore.clear()
                     RelayWebSocketClient.clearConnection()
+                    RelayForegroundService.stop(this)
                     showingConnectedScreen = false
                     showingQrScanner = false
                     checkConnectionStateAndShowQrScanner()
@@ -412,10 +261,12 @@ class MainActivity : AppCompatActivity() {
                 setContentView(R.layout.activity_qr_scanner)
                 currentContentRoot()?.let { applySystemInsets(it) }
                 bindQrScreen(pairing, pairingConnected)
-                triggerCameraPermissionRequest()
+                if (NotificationAccessUtil.isEnabled(this)) {
+                    triggerCameraPermissionRequest()
+                }
             } else {
                 bindQrScreen(pairing, pairingConnected)
-                if (hasCameraPermission()) {
+                if (NotificationAccessUtil.isEnabled(this) && hasCameraPermission()) {
                     startEmbeddedScanner()
                 }
             }
@@ -427,6 +278,8 @@ class MainActivity : AppCompatActivity() {
         val statusText = findViewById<android.widget.TextView>(R.id.qrScanStatusText)
         val detailsText = findViewById<android.widget.TextView>(R.id.qrScanDetailsText)
         val manualPairButton = findViewById<android.widget.Button>(R.id.manualPairButton)
+        val notificationAccessButton = findViewById<android.widget.Button>(R.id.qrNotificationAccessButton)
+        val privacyButton = findViewById<android.widget.Button>(R.id.qrPrivacyButton)
 
         if (pairingConnected && pairing != null) {
             statusText.text = getString(R.string.qr_scan_connected)
@@ -443,6 +296,14 @@ class MainActivity : AppCompatActivity() {
         manualPairButton.setOnClickListener {
             openManualPairScreen()
         }
+        notificationAccessButton.setOnClickListener {
+            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+        }
+        privacyButton.setOnClickListener { openPrivacyPolicy() }
+    }
+
+    private fun openPrivacyPolicy() {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
     }
 
     private fun hasCameraPermission(): Boolean {
@@ -486,5 +347,10 @@ class MainActivity : AppCompatActivity() {
             }
             .setCancelable(false)
             .show()
+    }
+
+    private companion object {
+        const val PRIVACY_POLICY_URL =
+            "https://github.com/yangtaengg/Tang/blob/main/PRIVACY_POLICY.md"
     }
 }

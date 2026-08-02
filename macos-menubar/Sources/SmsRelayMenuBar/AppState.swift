@@ -1,5 +1,4 @@
 import AppKit
-import CryptoKit
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -28,8 +27,9 @@ final class AppState: ObservableObject {
     @Published var serverState: String = "stopped"
     @Published private(set) var pairingHost: String = LocalNetworkInfo.defaultIPv4()
     @Published var pairingPort: UInt16 = 8765
-    @Published var pairingExpiresAt: Date = .distantFuture
-    @Published private(set) var pairingCode: String = "000000"
+    @Published var pairingExpiresAt: Date = .distantPast
+    @Published private(set) var pairingCode: String = ""
+    @Published private(set) var securityErrorText: String?
     @Published var qrImage: NSImage?
     @Published var qrPayloadString: String = ""
     @Published private(set) var pairedDeviceName: String?
@@ -41,6 +41,7 @@ final class AppState: ObservableObject {
     let messageStore = MessageStore()
     private let server: WebSocketServer
     private(set) var token: String
+    private var pairingSecret: String = ""
     private var pendingReplySmsByClientMsgId: [String: PendingReplySms] = [:]
     private var pairDeviceWindow: NSWindow?
     private lazy var messageWindow: NSWindow = {
@@ -70,20 +71,25 @@ final class AppState: ObservableObject {
     private var fallbackLocalClickMonitor: Any?
     private var fallbackDismissArmTime: Date = .distantPast
     private let fallbackToastDuration: TimeInterval = 8
-    private static let nonExpiringExpiresAtMs: Int64 = 253402300799000
+    private static let pairingWindowDuration: TimeInterval = 10 * 60
 
     init() {
         let initialPort: UInt16 = 8765
         let existing = Self.loadPersistedToken()
-        token = existing ?? TokenFactory.randomBase64Token()
+        let initialToken = existing ?? TokenFactory.randomBase64Token()
+        var initialSecurityError: String?
         if existing == nil {
-            Self.persistToken(token)
+            do {
+                try Self.persistToken(initialToken)
+            } catch {
+                initialSecurityError = L("keychain_unavailable")
+            }
         }
+        token = initialToken
+        securityErrorText = initialSecurityError
 
         pairingPort = initialPort
-        let initialPairingCode = Self.makePairingCode(from: token)
-        pairingCode = initialPairingCode
-        server = WebSocketServer(config: .init(port: initialPort, token: token, pairingCode: initialPairingCode))
+        server = WebSocketServer(config: .init(port: initialPort, token: token))
         server.onServerStateChanged = { [weak self] state in
             Task { @MainActor in
                 self?.serverState = state
@@ -151,28 +157,20 @@ final class AppState: ObservableObject {
                 }
             }
         }
-        server.onTokenAdopted = { [weak self] adoptedToken in
-            Task { @MainActor in
-                guard let self else { return }
-                self.token = adoptedToken
-                Self.persistToken(adoptedToken)
-                self.pairingCode = Self.makePairingCode(from: adoptedToken)
-                self.server.updateToken(adoptedToken)
-                self.server.updatePairingCode(self.pairingCode)
-                self.refreshPairingQR()
-            }
-        }
-
         server.start()
-        refreshPairingQR()
     }
 
     func regenerateToken() {
-        token = TokenFactory.randomBase64Token()
-        Self.persistToken(token)
-        server.updateToken(token)
-        pairingCode = Self.makePairingCode(from: token)
-        server.updatePairingCode(pairingCode)
+        let nextToken = TokenFactory.randomBase64Token()
+        do {
+            try Self.persistToken(nextToken)
+        } catch {
+            securityErrorText = L("keychain_unavailable")
+            return
+        }
+        securityErrorText = nil
+        token = nextToken
+        server.updateToken(nextToken)
         pairedDeviceName = nil
         pairedAppVersion = nil
         refreshPairingQR()
@@ -180,26 +178,25 @@ final class AppState: ObservableObject {
 
     private static func loadPersistedToken() -> String? {
         if let keychainToken = KeychainStore.loadToken(), !keychainToken.isEmpty {
-            UserDefaults.standard.set(keychainToken, forKey: Self.fallbackTokenDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: Self.fallbackTokenDefaultsKey)
             return keychainToken
         }
         let fallback = UserDefaults.standard.string(forKey: Self.fallbackTokenDefaultsKey)
-        return (fallback?.isEmpty == false) ? fallback : nil
-    }
-
-    private static func persistToken(_ value: String) {
-        UserDefaults.standard.set(value, forKey: Self.fallbackTokenDefaultsKey)
+        guard let fallback, !fallback.isEmpty else {
+            return nil
+        }
         do {
-            try KeychainStore.saveToken(value)
+            try KeychainStore.saveToken(fallback)
+            UserDefaults.standard.removeObject(forKey: Self.fallbackTokenDefaultsKey)
+            return fallback
         } catch {
+            return nil
         }
     }
 
-    private static func makePairingCode(from token: String) -> String {
-        let digest = SHA256.hash(data: Data(token.utf8))
-        let value = digest.prefix(4).reduce(0) { ($0 << 8) | UInt64($1) }
-        let code = value % 1_000_000
-        return String(format: "%06llu", code)
+    private static func persistToken(_ value: String) throws {
+        try KeychainStore.saveToken(value)
+        UserDefaults.standard.removeObject(forKey: Self.fallbackTokenDefaultsKey)
     }
 
     func openPairDeviceWindow() {
@@ -213,13 +210,27 @@ final class AppState: ObservableObject {
     }
 
     func refreshPairingQR() {
+        guard securityErrorText == nil else {
+            server.endPairing()
+            qrImage = nil
+            qrPayloadString = ""
+            pairingCode = ""
+            return
+        }
         pairingHost = LocalNetworkInfo.defaultIPv4()
-        pairingExpiresAt = Date(timeIntervalSince1970: TimeInterval(Self.nonExpiringExpiresAtMs) / 1000)
+        pairingExpiresAt = Date().addingTimeInterval(Self.pairingWindowDuration)
+        pairingSecret = TokenFactory.randomBase64Token()
+        pairingCode = TokenFactory.randomManualCode()
+        server.beginPairing(
+            qrSecret: pairingSecret,
+            manualCode: pairingCode,
+            expiresAt: pairingExpiresAt
+        )
         let payload = PairingPayload(
-            version: 1,
+            version: SecureChannel.protocolVersion,
             url: "ws://\(pairingHost):\(pairingPort)/ws",
-            pairingToken: token,
-            expiresAtMs: Self.nonExpiringExpiresAtMs,
+            pairingToken: pairingSecret,
+            expiresAtMs: Int64(pairingExpiresAt.timeIntervalSince1970 * 1000),
             deviceName: Host.current().localizedName ?? "Mac"
         )
 
@@ -486,6 +497,12 @@ final class AppState: ObservableObject {
     }
 
     private func closePairingWindowIfOpen() {
+        server.endPairing()
+        pairingSecret = ""
+        pairingCode = ""
+        qrPayloadString = ""
+        qrImage = nil
+        pairingExpiresAt = .distantPast
         guard let window = pairDeviceWindow else {
             return
         }

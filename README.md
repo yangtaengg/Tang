@@ -1,65 +1,80 @@
 # Tang!
 
-Tang! relays Android notification-based messages and call alerts to a macOS menu bar app over local network.
+Tang! relays supported Android message and incoming-call notifications to a paired macOS menu bar app over the local network. It has no cloud backend, advertising SDK, or analytics SDK.
 
-## Projects
+## Components
 
-- `macos-menubar`: SwiftUI menu bar app with embedded WebSocket server, pairing QR, Keychain token auth, and local notifications.
-- `android-app`: Kotlin Android app with `NotificationListenerService`, QR pairing, secure token storage, and WebSocket relay client.
-- `shared/protocol.md`: JSON protocol and pairing payload contract.
+- `macos-menubar`: SwiftUI menu bar app, local WebSocket server, Keychain token storage, message/call notifications, and replies.
+- `android-app`: Kotlin Android app, `NotificationListenerService`, Android Keystore-backed pairing storage, and foreground relay client.
+- `shared/protocol.md`: version 2 authentication, key derivation, encrypted-frame, and payload contract.
+- `PRIVACY_POLICY.md`: Korean and English privacy policy used by the Android app and store listing.
 
-## Platform Downloads
+## Security model
 
-### macOS app (ZIP)
+- Pairing QR secrets and 12-character setup codes expire after 10 minutes and are invalidated after successful pairing.
+- Authentication uses a random challenge and HMAC-SHA256 proof; credentials are never sent as plaintext WebSocket messages.
+- Directional session keys are derived with HKDF-SHA256. Every application payload is protected with AES-256-GCM, an exact sequence number, and replay rejection.
+- Android stores pairing data encrypted by an Android Keystore key. macOS stores its long-term token in Keychain.
+- The server rate-limits authentication failures, rejects v1 clients, and caps frames at 256 KiB.
 
-- Download the latest ZIP from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
-- Unzip and move `Tang!.app` to Applications.
-- First run in Terminal:
-  - `xattr -dr com.apple.quarantine '/Applications/Tang!.app'`
-  - `open '/Applications/Tang!.app'`
+The connection currently uses local `ws://` transport, so endpoint addresses, timing, and approximate frame sizes remain visible even though application payloads are encrypted. See `shared/protocol.md` for the exact boundary.
 
-### Android app (APK)
+## Build and verification
 
-- Download the latest APK from GitHub Releases: `https://github.com/yangtaengg/Tang/releases/latest`
-- Install on your Android device and allow Notification Access when prompted.
+Android requires JDK 17 and Android SDK 36:
 
-## Automated Build and Release
+```bash
+cd android-app
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease :app:bundleRelease
+```
 
-- On every push to `main`, GitHub Actions builds both apps and publishes an auto prerelease.
-- Workflow file: `.github/workflows/build-release.yml`
-- Auto release tag format: `auto-<UTC timestamp>-<short-sha>`
-- Uploaded assets:
-  - `app-debug.apk`
-  - `Tang-macOS.zip`
+macOS requires Xcode/Swift 5.10 and macOS 13 or newer:
 
-Notes:
+```bash
+cd macos-menubar
+swift test
+swift build -c release --product SmsRelayMenuBar
+```
 
-- The macOS ZIP is unsigned (free distribution mode) and may require quarantine removal.
-- The current APK is a debug build.
+Release builds use R8/resource shrinking. A local build is unsigned unless the four `ANDROID_KEY*`/`ANDROID_KEYSTORE*` environment variables documented in the workflow are supplied.
 
-## Quick Start
+## Release pipeline
 
-1. Install and run `Tang!` on macOS.
-2. Open `Pair device` in the menu bar app.
-3. Install and open the Android app from `android-app`.
-4. Enable notification access in Android settings.
-5. Scan the QR and keep both devices on the same Wi-Fi.
+[`.github/workflows/build-release.yml`](.github/workflows/build-release.yml) runs tests, Android lint, release APK/AAB builds, and a macOS release build on pull requests and pushes. A tag matching `v*` additionally:
 
-Detailed docs:
+1. signs Android artifacts with the Play upload key;
+2. uploads the AAB to the Google Play `beta` (open testing) track;
+3. signs the macOS app with Developer ID, notarizes it, and staples the ticket;
+4. publishes the signed APK/AAB and notarized macOS ZIP as a GitHub Release.
 
-- `macos-menubar/README.md`
-- `android-app/README.md`
+Required GitHub Actions secrets:
 
-## Policy Intent
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+- `MACOS_CERTIFICATE_P12_BASE64`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
 
-This project avoids SMS/call sensitive permissions:
+The Google service account must have permission for this app in Play Console. The Play listing still needs an accurate Data safety form, privacy-policy URL, `SEND_SMS` permission declaration/approval, tester eligibility, and completed review. Tagging does not bypass those external gates.
 
-- No `READ_SMS`
-- No `RECEIVE_SMS`
-- No `READ_CALL_LOG`
+## Setup
 
-Android data source is notification access (`NotificationListenerService`) only.
+1. Install and open Tang! on macOS, then choose **Pair device**.
+2. Install and open Tang! on Android.
+3. Review the in-app disclosure and enable notification access.
+4. Scan the Mac QR or enter its 12-character setup code while both devices are on the same local network.
+5. Optionally enable direct SMS sending or battery-optimization guidance from the connected screen.
 
-## Support
+Tang! does not request `READ_SMS`, `RECEIVE_SMS`, `READ_CALL_LOG`, or `READ_PHONE_STATE`. Direct `SEND_SMS` is optional; notification-action quick replies can work without it when the source app exposes a reply action.
 
-- Buy me a coffee: `https://www.buymeacoffee.com/yangtaengg`
+## Support and privacy
+
+- Privacy policy: [PRIVACY_POLICY.md](PRIVACY_POLICY.md)
+- Issues and privacy contact: [GitHub Issues](https://github.com/yangtaengg/Tang/issues)
+- Support the project: [Buy me a coffee](https://www.buymeacoffee.com/yangtaengg)

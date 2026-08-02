@@ -21,13 +21,11 @@ class SmsNotificationListenerService : NotificationListenerService() {
         super.onCreate()
         instance = this
         RelayWebSocketClient.initialize(this)
-        PhoneStateCallMonitor.start(this)
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         RelayWebSocketClient.initialize(this)
-        PhoneStateCallMonitor.start(this)
         QuickReplyStore.refreshFromActiveNotifications(activeNotifications ?: emptyArray())
         RelayWebSocketClient.connectIfNeeded()
     }
@@ -78,6 +76,5 @@ class SmsNotificationListenerService : NotificationListenerService() {
         if (instance === this) {
             instance = null
         }
-        PhoneStateCallMonitor.stop()
     }
 }

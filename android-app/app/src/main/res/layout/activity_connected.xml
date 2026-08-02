@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/tang_bg"
-    android:gravity="center"
-    android:orientation="vertical"
+    android:fillViewport="true"
     android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
     <ImageView
         android:layout_width="120dp"
@@ -57,16 +62,54 @@
     </com.google.android.material.card.MaterialCardView>
 
     <Button
+        android:id="@+id/connectedNotificationAccessButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/open_notification_access" />
+
+    <Button
+        android:id="@+id/connectedStatusNotificationButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/request_status_notifications"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/connectedSmsPermissionButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/request_sms_permission" />
+
+    <Button
+        android:id="@+id/connectedBatterySettingsButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/open_battery_settings" />
+
+    <Button
+        android:id="@+id/connectedPrivacyButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/privacy_policy" />
+
+    <Button
         android:id="@+id/disconnectButton"
         style="@style/Widget.Tang.ButtonSecondary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="8dp"
         android:text="@string/disconnect" />
 
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+    </LinearLayout>
 
-</LinearLayout>
+</ScrollView>
