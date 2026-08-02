@@ -25,6 +25,12 @@ struct PairingView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let securityError = appState.securityErrorText {
+                Text(securityError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(L("pair_code_title"))
                     .font(.caption)

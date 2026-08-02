@@ -33,6 +33,8 @@ object RelayWebSocketClient {
     private var socket: WebSocket? = null
     @Volatile
     private var authenticated = false
+    private var pendingHandshake: PendingHandshake? = null
+    private var secureSession: SecureChannel.Session? = null
     private val authStateListeners = LinkedHashSet<(Boolean) -> Unit>()
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
@@ -50,6 +52,13 @@ object RelayWebSocketClient {
         val success: Boolean,
         val reason: String?,
         val atMs: Long
+    )
+
+    private data class PendingHandshake(
+        val payload: QrPayload,
+        val clientNonceBase64: String,
+        val device: String,
+        val appVersion: String
     )
 
     private val client = OkHttpClient.Builder()
@@ -83,59 +92,115 @@ object RelayWebSocketClient {
 
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                attempt = 0
-                updateAuthenticated(false)
-                val auth = JSONObject()
-                    .put("type", "auth")
-                    .put("token", payload.pairingToken)
-                    .put("device", Build.MODEL)
-            .put("appVersion", "5")
-                webSocket.send(auth.toString())
+                synchronized(RelayWebSocketClient) {
+                    if (!isCurrentSocket(webSocket)) {
+                        webSocket.close(CLOSE_NORMAL, "superseded")
+                        return
+                    }
+                    attempt = 0
+                    updateAuthenticated(false)
+                    secureSession = null
+                    val clientNonceBase64 = SecureChannel.randomNonceBase64()
+                    val device = Build.MODEL.take(200)
+                    val appVersion = BuildConfig.VERSION_NAME.take(100)
+                    pendingHandshake = PendingHandshake(
+                        payload = payload,
+                        clientNonceBase64 = clientNonceBase64,
+                        device = device,
+                        appVersion = appVersion
+                    )
+                    webSocket.send(
+                        JSONObject()
+                            .put("type", "auth.hello")
+                            .put("version", SecureChannel.PROTOCOL_VERSION)
+                            .put("clientNonce", clientNonceBase64)
+                            .put("device", device)
+                            .put("appVersion", appVersion)
+                            .toString()
+                    )
+                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                val message = runCatching { JSONObject(text) }.getOrNull() ?: return
-                val type = message.optString("type")
-                when (type) {
-                    "auth.ok" -> {
-                        updateAuthenticated(true)
-                        startHeartbeatLocked()
-                        flushQueue()
+                synchronized(RelayWebSocketClient) {
+                    if (!isCurrentSocket(webSocket)) {
+                        return
                     }
-                    "auth.fail" -> {
-                        updateAuthenticated(false)
-                        stopHeartbeatLocked()
+                    if (text.length > MAX_FRAME_CHARS) {
                         closeAndReset()
+                        return
                     }
-                    "sms.reply" -> {
-                        handleReplyCommand(message)
+                    val message = runCatching { JSONObject(text) }.getOrNull() ?: run {
+                        closeAndReset()
+                        return
                     }
-                    "reply_sms" -> {
-                        handleReplySmsCommand(message)
+                    val type = message.optString("type")
+                    if (authenticated && type != "secure") {
+                        closeAndReset()
+                        return
                     }
-                    "call.hangup" -> {
-                        handleCallHangUpCommand()
+                    when (type) {
+                        "auth.challenge" -> handleAuthChallenge(webSocket, message)
+                        "auth.ok" -> {
+                            if (secureSession == null || !message.optBoolean("secure")) {
+                                closeAndReset()
+                                return
+                            }
+                            updateAuthenticated(true)
+                            startHeartbeatLocked()
+                            flushQueue()
+                        }
+                        "auth.fail" -> {
+                            updateAuthenticated(false)
+                            stopHeartbeatLocked()
+                            closeAndReset()
+                        }
+                        "secure" -> {
+                            if (!authenticated) {
+                                closeAndReset()
+                                return
+                            }
+                            handleSecureEnvelope(message)
+                        }
+                        else -> closeAndReset()
                     }
-                    "pong" -> Unit
                 }
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                Unit
+                synchronized(RelayWebSocketClient) {
+                    if (isCurrentSocket(webSocket)) {
+                        closeAndReset()
+                    }
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                updateAuthenticated(false)
-                stopHeartbeatLocked()
-                socket = null
-                scheduleReconnect()
+                synchronized(RelayWebSocketClient) {
+                    if (!isCurrentSocket(webSocket)) {
+                        return
+                    }
+                    updateAuthenticated(false)
+                    stopHeartbeatLocked()
+                    pendingHandshake = null
+                    secureSession = null
+                    socket = null
+                    scheduleReconnect()
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                updateAuthenticated(false)
-                stopHeartbeatLocked()
-                socket = null
-                scheduleReconnect()
+                synchronized(RelayWebSocketClient) {
+                    if (!isCurrentSocket(webSocket)) {
+                        return
+                    }
+                    updateAuthenticated(false)
+                    stopHeartbeatLocked()
+                    pendingHandshake = null
+                    secureSession = null
+                    socket = null
+                    scheduleReconnect()
+                }
             }
         })
     }
@@ -153,6 +218,9 @@ object RelayWebSocketClient {
 
     @Synchronized
     fun isAuthenticated(): Boolean = authenticated
+
+    @Synchronized
+    private fun isCurrentSocket(candidate: WebSocket): Boolean = socket === candidate
 
     @Synchronized
     fun addAuthStateListener(listener: (Boolean) -> Unit) {
@@ -208,18 +276,130 @@ object RelayWebSocketClient {
 
     private fun flushSmsQueue(webSocket: WebSocket) {
         while (smsQueue.isNotEmpty()) {
-            val event = smsQueue.removeFirst()
+            val event = smsQueue.first()
             val payload = buildSmsPayload(event)
-            webSocket.send(payload.toString())
+            if (!sendSecure(webSocket, payload)) {
+                return
+            }
+            smsQueue.removeFirst()
         }
     }
 
     private fun flushCallQueue(webSocket: WebSocket) {
         while (callQueue.isNotEmpty()) {
-            val event = callQueue.removeFirst()
+            val event = callQueue.first()
             val payload = buildCallPayload(event)
-            webSocket.send(payload.toString())
+            if (!sendSecure(webSocket, payload)) {
+                return
+            }
+            callQueue.removeFirst()
         }
+    }
+
+    @Synchronized
+    private fun handleAuthChallenge(webSocket: WebSocket, message: JSONObject) {
+        val pending = pendingHandshake ?: return
+        if (message.optInt("version") != SecureChannel.PROTOCOL_VERSION) {
+            closeAndReset()
+            return
+        }
+        val challengeBase64 = message.optString("challenge")
+        val keys = runCatching {
+            SecureChannel.deriveKeys(
+                pending.payload.pairingToken,
+                pending.clientNonceBase64,
+                challengeBase64
+            )
+        }.getOrNull() ?: run {
+            closeAndReset()
+            return
+        }
+        secureSession = SecureChannel.Session(
+            sendKey = keys.clientToServer,
+            receiveKey = keys.serverToClient
+        )
+        val proof = SecureChannel.authProofBase64(
+            secret = pending.payload.pairingToken,
+            clientNonceBase64 = pending.clientNonceBase64,
+            challengeBase64 = challengeBase64,
+            device = pending.device,
+            appVersion = pending.appVersion
+        )
+        webSocket.send(
+            JSONObject()
+                .put("type", "auth.proof")
+                .put("proof", proof)
+                .toString()
+        )
+    }
+
+    @Synchronized
+    private fun handleSecureEnvelope(message: JSONObject) {
+        val session = secureSession ?: return
+        val sequence = message.optLong("seq", -1)
+        if (sequence <= 0) {
+            closeAndReset()
+            return
+        }
+        val plaintext = session.decrypt(
+            SecureChannel.EncryptedFrame(
+                sequence = sequence,
+                nonceBase64 = message.optString("nonce"),
+                ciphertextBase64 = message.optString("ciphertext")
+            )
+        ) ?: run {
+            closeAndReset()
+            return
+        }
+        val secureMessage = runCatching { JSONObject(plaintext) }.getOrNull() ?: run {
+            closeAndReset()
+            return
+        }
+        when (secureMessage.optString("type")) {
+            "pairing.complete" -> handlePairingComplete(secureMessage)
+            "sms.reply" -> handleReplyCommand(secureMessage)
+            "reply_sms" -> handleReplySmsCommand(secureMessage)
+            "call.hangup" -> handleCallHangUpCommand()
+            "pong" -> Unit
+        }
+    }
+
+    private fun handlePairingComplete(message: JSONObject) {
+        val pending = pendingHandshake ?: return
+        val token = message.optString("token")
+        if (token.length < 32) {
+            closeAndReset()
+            return
+        }
+        appContext?.let { context ->
+            PairingStore(context).save(
+                pending.payload.copy(
+                    version = SecureChannel.PROTOCOL_VERSION,
+                    pairingToken = token,
+                    expiresAtMs = Long.MAX_VALUE
+                )
+            )
+        }
+        pendingHandshake = pending.copy(
+            payload = pending.payload.copy(
+                version = SecureChannel.PROTOCOL_VERSION,
+                pairingToken = token,
+                expiresAtMs = Long.MAX_VALUE
+            )
+        )
+    }
+
+    private fun sendSecure(webSocket: WebSocket, payload: JSONObject): Boolean {
+        val session = secureSession ?: return false
+        val frame = runCatching { session.encrypt(payload.toString()) }.getOrNull() ?: return false
+        return webSocket.send(
+            JSONObject()
+                .put("type", "secure")
+                .put("seq", frame.sequence)
+                .put("nonce", frame.nonceBase64)
+                .put("ciphertext", frame.ciphertextBase64)
+                .toString()
+        )
     }
 
 
@@ -365,7 +545,7 @@ object RelayWebSocketClient {
             .put("replyKey", replyKey)
             .put("success", success)
         reason?.let { payload.put("reason", it) }
-        webSocket.send(payload.toString())
+        sendSecure(webSocket, payload)
     }
 
     @Synchronized
@@ -379,7 +559,7 @@ object RelayWebSocketClient {
             .put("client_msg_id", clientMsgId)
             .put("success", success)
         reason?.let { payload.put("reason", it) }
-        webSocket.send(payload.toString())
+        sendSecure(webSocket, payload)
     }
 
     @Synchronized
@@ -418,6 +598,7 @@ object RelayWebSocketClient {
         }
         val context = appContext ?: return
         if (!PairingStore(context).isPairedAndValidNow()) {
+            RelayForegroundService.stop(context)
             return
         }
 
@@ -528,6 +709,8 @@ object RelayWebSocketClient {
         stopHeartbeatLocked()
         socket?.close(CLOSE_NORMAL, "reset")
         socket = null
+        pendingHandshake = null
+        secureSession = null
         updateAuthenticated(false)
     }
 
@@ -536,7 +719,7 @@ object RelayWebSocketClient {
         if (heartbeatFuture?.isDone == false) {
             return
         }
-        heartbeatFuture = scheduler.scheduleAtFixedRate(
+        heartbeatFuture = scheduler.scheduleWithFixedDelay(
             { sendHeartbeatTick() },
             HEARTBEAT_INTERVAL_SECONDS,
             HEARTBEAT_INTERVAL_SECONDS,
@@ -556,11 +739,11 @@ object RelayWebSocketClient {
         if (!authenticated) {
             return
         }
-        val sent = webSocket.send(
+        val sent = sendSecure(
+            webSocket,
             JSONObject()
                 .put("type", "ping")
                 .put("timestamp", System.currentTimeMillis())
-                .toString()
         )
         if (!sent) {
             updateAuthenticated(false)
@@ -569,4 +752,6 @@ object RelayWebSocketClient {
             scheduleReconnect()
         }
     }
+
+    private const val MAX_FRAME_CHARS = 512 * 1024
 }

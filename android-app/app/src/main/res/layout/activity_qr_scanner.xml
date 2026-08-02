@@ -6,14 +6,13 @@
     android:background="@color/tang_bg"
     android:orientation="vertical"
     android:padding="16dp"
-    android:weightSum="4">
+    android:weightSum="5">
 
     <com.google.android.material.card.MaterialCardView
         style="@style/Widget.Tang.InsetPanel"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="3"
-        android:clipToOutline="true"
         app:cardCornerRadius="20dp">
 
         <com.journeyapps.barcodescanner.DecoratedBarcodeView
@@ -26,7 +25,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="12dp"
-        android:layout_weight="1"
+        android:layout_weight="2"
         android:gravity="center_vertical"
         android:orientation="vertical">
 
@@ -55,6 +54,22 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/manual_pair_connect" />
+
+        <Button
+            android:id="@+id/qrNotificationAccessButton"
+            style="@style/Widget.Tang.ButtonSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/open_notification_access" />
+
+        <Button
+            android:id="@+id/qrPrivacyButton"
+            style="@style/Widget.Tang.ButtonSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/privacy_policy" />
     </LinearLayout>
 
 </LinearLayout>

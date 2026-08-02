@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -22,18 +23,28 @@ class RelayForegroundService : Service() {
                 return
             }
             val intent = Intent(appContext, RelayForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                appContext.startForegroundService(intent)
-            } else {
-                appContext.startService(intent)
-            }
+            appContext.startForegroundService(intent)
+        }
+
+        fun stop(context: Context) {
+            val appContext = context.applicationContext
+            val serviceIntent = Intent(appContext, RelayForegroundService::class.java)
+            appContext.stopService(serviceIntent)
         }
     }
 
     override fun onCreate() {
         super.onCreate()
         createChannelIfNeeded()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -49,9 +60,6 @@ class RelayForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createChannelIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
         val manager = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)
         manager.createNotificationChannel(channel)

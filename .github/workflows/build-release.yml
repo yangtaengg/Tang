@@ -1,17 +1,20 @@
-name: Build and Release
+name: CI and Release
 
 on:
+  pull_request:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
-  group: build-release-${{ github.ref }}
+  group: ci-release-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   android:
@@ -19,26 +22,78 @@ jobs:
     defaults:
       run:
         working-directory: android-app
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@d7793b545071e98d581d3bf084a51c3213318a07 # v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
-      - name: Build debug APK
+      - name: Validate Android release secrets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PLAY_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          test -n "$PLAY_SERVICE_ACCOUNT"
+
+      - name: Configure Android release signing
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/tang-upload.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
+          chmod 600 "$ANDROID_KEYSTORE_FILE"
+          echo "ANDROID_KEYSTORE_FILE=$ANDROID_KEYSTORE_FILE" >> "$GITHUB_ENV"
+
+      - name: Test, lint, and build release artifacts
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug
+          ./gradlew --no-daemon \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:assembleRelease \
+            :app:bundleRelease
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Verify signed Android artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: tang-android-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          name: tang-android
+          path: |
+            android-app/app/build/outputs/apk/release/app-release*.apk
+            android-app/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Publish to Google Play open testing
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.smsrelay.mvp
+          releaseFiles: android-app/app/build/outputs/bundle/release/app-release.aab
+          track: beta
+          status: completed
 
   macos:
     runs-on: macos-14
@@ -46,25 +101,26 @@ jobs:
       APP_NAME: Tang!.app
       APP_EXECUTABLE: Tang
       APP_BUNDLE_ID: com.yangtaengg.tang
-      APP_VERSION: 0.1.0
+      APP_VERSION: 1.0.0
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Build macOS binary
+      - name: Test and build macOS app
         working-directory: macos-menubar
-        run: swift build -c release --product SmsRelayMenuBar
+        run: |
+          swift test
+          swift build -c release --product SmsRelayMenuBar
 
       - name: Create app bundle
         run: |
-          mkdir -p "$APP_NAME/Contents/MacOS"
-          mkdir -p "$APP_NAME/Contents/Resources"
+          mkdir -p "$APP_NAME/Contents/MacOS" "$APP_NAME/Contents/Resources"
           cp macos-menubar/.build/release/SmsRelayMenuBar "$APP_NAME/Contents/MacOS/$APP_EXECUTABLE"
           chmod +x "$APP_NAME/Contents/MacOS/$APP_EXECUTABLE"
-
+          cp -R macos-menubar/Sources/SmsRelayMenuBar/Resources/. "$APP_NAME/Contents/Resources/"
           cat > "$APP_NAME/Contents/Info.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>CFBundleName</key><string>Tang!</string>
@@ -74,65 +130,112 @@ jobs:
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
             <key>CFBundleVersion</key><string>${{ github.run_number }}</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>LSUIElement</key><true/>
+            <key>NSLocalNetworkUsageDescription</key><string>Tang connects only to your paired Android device on the local network.</string>
           </dict>
           </plist>
           EOF
+          plutil -lint "$APP_NAME/Contents/Info.plist"
 
-      - name: Create ZIP fallback
+      - name: Validate Apple release secrets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "Tang!.app" "Tang-macOS.zip"
+          test -n "$CERTIFICATE_BASE64"
+          test -n "$CERTIFICATE_PASSWORD"
+          test -n "$SIGNING_IDENTITY"
+          test -n "$APPLE_ID"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APPLE_APP_PASSWORD"
 
-      - name: Upload macOS ZIP artifact
-        uses: actions/upload-artifact@v4
+      - name: Import Developer ID certificate
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/tang-build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Sign macOS app
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP_NAME"
+          codesign --verify --deep --strict --verbose=2 "$APP_NAME"
+
+      - name: Ad-hoc sign CI app
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          codesign --force --deep --sign - "$APP_NAME"
+          codesign --verify --deep --strict --verbose=2 "$APP_NAME"
+
+      - name: Notarize macOS app
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" Tang-macOS-notarization.zip
+          xcrun notarytool submit Tang-macOS-notarization.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$APP_NAME"
+          xcrun stapler validate "$APP_NAME"
+
+      - name: Package macOS app
+        run: ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" Tang-macOS.zip
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: tang-macos-zip
+          name: tang-macos
           path: Tang-macOS.zip
+          if-no-files-found: error
 
-  release:
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - android
       - macos
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - name: Download release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
 
-      - name: Generate release tag
-        id: tag
-        run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
-          TAG="auto-$(date -u +'%Y%m%d-%H%M%S')-${SHORT_SHA}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish release
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          cat > release-notes.md <<'EOF'
-          ## macOS install (free distribution)
-          1. Download `Tang-macOS.zip`
-          2. Unzip and move `Tang!.app` to `/Applications`
-          3. Run once in Terminal:
-             `xattr -dr com.apple.quarantine "/Applications/Tang!.app"`
-          4. Launch app:
-             `open "/Applications/Tang!.app"`
-
-          ## Android install
-          - Download and install `app-debug.apk`
-          EOF
-
-          gh release create "$TAG" \
-            dist/tang-android-apk/app-debug.apk \
-            dist/tang-macos-zip/Tang-macOS.zip \
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/tang-android/app-release.apk \
+            dist/tang-android/app-release.aab \
+            dist/tang-macos/Tang-macOS.zip \
             --repo "$GH_REPO" \
-            --title "Auto build $TAG" \
-            --notes-file release-notes.md \
-            --prerelease
+            --title "Tang! ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
