@@ -1,115 +1,81 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/tang_bg"
-    android:fillViewport="true"
-    android:padding="24dp">
+    android:background="@color/tang_bg">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical">
-
-    <ImageView
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:layout_marginBottom="32dp"
-        android:contentDescription="@string/app_name"
-        android:src="@mipmap/ic_launcher"
-        app:tint="@color/tang_primary" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans-serif-medium"
-        android:gravity="center"
-        android:text="@string/app_name"
-        android:textAppearance="@style/TangTitleText" />
-
-    <TextView
-        android:id="@+id/connectedStatusText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:gravity="center"
-        android:text="@string/connected_status"
-        android:textAppearance="@style/TangBodyText"
-        android:textColor="@color/tang_body" />
-
-    <com.google.android.material.card.MaterialCardView
-        style="@style/Widget.Tang.InsetPanel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="24dp">
+
+        <ImageView
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginBottom="24dp"
+            android:contentDescription="@string/app_name"
+            android:src="@mipmap/ic_launcher"
+            app:tint="@color/tang_primary" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:text="@string/app_name"
+            android:textAppearance="@style/TangTitleText" />
+
+        <TextView
+            android:id="@+id/connectedStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/connected_status"
+            android:textAppearance="@style/TangBodyText"
+            android:textColor="@color/tang_body" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Tang.InsetPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp">
 
             <TextView
                 android:id="@+id/connectedDetailsText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
+                android:padding="16dp"
                 android:text="@string/connected_to_mac"
                 android:textAppearance="@style/TangBodyText" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <Button
+            android:id="@+id/reconnectButton"
+            style="@style/Widget.Tang.ButtonPrimary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/reconnect" />
+
+        <Button
+            android:id="@+id/disconnectButton"
+            style="@style/Widget.Tang.ButtonSecondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/disconnect" />
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    </ScrollView>
 
-    <Button
-        android:id="@+id/connectedNotificationAccessButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="@string/open_notification_access" />
-
-    <Button
-        android:id="@+id/connectedStatusNotificationButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/request_status_notifications"
-        android:visibility="gone" />
-
-    <Button
-        android:id="@+id/connectedSmsPermissionButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/request_sms_permission" />
-
-    <Button
-        android:id="@+id/connectedBatterySettingsButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/open_battery_settings" />
-
-    <Button
-        android:id="@+id/connectedPrivacyButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/privacy_policy" />
-
-    <Button
-        android:id="@+id/disconnectButton"
-        style="@style/Widget.Tang.ButtonSecondary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/disconnect" />
-
-    </LinearLayout>
-
-</ScrollView>
+    <include layout="@layout/view_required_settings_overlay" />
+</FrameLayout>

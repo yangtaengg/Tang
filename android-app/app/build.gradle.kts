@@ -22,8 +22,8 @@ android {
         applicationId = "com.smsrelay.mvp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2026022102
-        versionName = "1.0.0"
+        versionCode = 2026022103
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -66,7 +66,7 @@ android {
     }
 
     lint {
-        // Play already contains versionCode 2026022101, so future upgrades must remain above it.
+        // Play already contains versionCode 2026022102, so future upgrades must remain above it.
         disable += "HighAppVersionCode"
     }
 }

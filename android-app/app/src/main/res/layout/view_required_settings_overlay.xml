@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/requiredSettingsOverlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tang_bg"
+    android:elevation="12dp"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="22dp"
+    android:paddingBottom="18dp"
+    android:visibility="gone">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.14"
+        android:text="@string/required_settings_eyebrow"
+        android:textColor="@color/tang_primary"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="sans-serif-medium"
+        android:text="@string/required_settings_fullscreen_title"
+        android:textColor="@color/tang_title"
+        android:textSize="30sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:lineSpacingExtra="2dp"
+        android:text="@string/required_settings_fullscreen_subtitle"
+        android:textColor="@color/tang_body"
+        android:textSize="17sp" />
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/requiredSettingsPager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        android:layout_weight="1"
+        android:clipToPadding="false" />
+
+    <TextView
+        android:id="@+id/requiredSettingsIndicator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="@color/tang_primary"
+        android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/requiredSettingsSwipeGuide"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="6dp"
+        android:fontFamily="sans-serif-medium"
+        android:text="@string/required_settings_swipe_guide"
+        android:textColor="@color/tang_body"
+        android:textSize="15sp" />
+
+    <Button
+        android:id="@+id/requiredSettingsLaterButton"
+        style="@style/Widget.Tang.ButtonSecondary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/required_settings_later" />
+</LinearLayout>

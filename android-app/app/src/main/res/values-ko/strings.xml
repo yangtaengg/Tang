@@ -7,25 +7,25 @@
     <string name="open_samsung_notification_content_settings">삼성 알림 내용 설정 열기</string>
     <string name="scan_qr">QR 스캔으로 페어링</string>
     <string name="clear_pairing">페어링 해제</string>
-    <string name="open_battery_settings">배터리 최적화 안내</string>
+    <string name="open_battery_settings">배터리 설정 열기</string>
     <string name="request_battery_exclusion">배터리 최적화 제외 허용</string>
-    <string name="request_sms_permission">SMS 전송 권한 허용</string>
-    <string name="request_status_notifications">릴레이 상태 알림 허용</string>
-    <string name="manual_pair_code_hint">12자리 설정 코드</string>
-    <string name="manual_pair_connect">설정 코드로 페어링</string>
-    <string name="manual_pair_dialog_title">설정 코드로 연결</string>
-    <string name="manual_pair_screen_title">설정 코드 입력</string>
+    <string name="request_sms_permission">SMS 전송 허용</string>
+    <string name="request_status_notifications">알림 허용</string>
+    <string name="manual_pair_code_hint">12자리 연결 코드</string>
+    <string name="manual_pair_connect">연결 코드 입력</string>
+    <string name="manual_pair_dialog_title">연결 코드로 연결</string>
+    <string name="manual_pair_screen_title">연결 코드 입력</string>
     <string name="manual_pair_dialog_subtitle">현재 Wi-Fi에서 Mac을 자동으로 찾습니다.</string>
     <string name="manual_pair_host_label">Mac 주소</string>
     <string name="manual_pair_host_hint">예: 192.168.0.12 또는 ws://192.168.0.12:8765/ws</string>
     <string name="manual_pair_host_required">현재 Wi-Fi에서 Mac을 찾지 못했습니다. Mac IP/호스트를 직접 입력하세요.</string>
-    <string name="manual_pair_code_label">12자리 설정 코드</string>
+    <string name="manual_pair_code_label">12자리 연결 코드</string>
     <string name="manual_pair_cancel">취소</string>
     <string name="manual_pair_back">뒤로</string>
     <string name="manual_pair_confirm">연결</string>
     <string name="manual_pair_finding_mac">Mac 연결 중…</string>
-    <string name="manual_pair_invalid_code">12자리 설정 코드를 모두 입력하세요.</string>
-    <string name="manual_pair_auth_failed">설정 코드 인증에 실패했습니다. Mac의 페어링 화면을 새로고침한 뒤 다시 시도하세요.</string>
+    <string name="manual_pair_invalid_code">12자리 연결 코드를 모두 입력하세요.</string>
+    <string name="manual_pair_auth_failed">연결 코드 인증에 실패했습니다. Mac의 페어링 화면을 새로고침한 뒤 다시 시도하세요.</string>
 
     <string name="toast_incoming_call_enabled">수신 전화 알림이 활성화되었습니다.</string>
     <string name="toast_sms_permission_granted">SMS 전송 권한이 허용되었습니다.</string>
@@ -34,6 +34,7 @@
     <string name="toast_status_notifications_denied">릴레이는 실행되지만 알림 창에 상태가 표시되지 않을 수 있습니다.</string>
     <string name="toast_paired_with_device">%1$s와 페어링되었습니다.</string>
     <string name="toast_pairing_cleared">페어링이 해제되었습니다.</string>
+    <string name="toast_reconnecting">Mac에 다시 연결하는 중입니다.</string>
     <string name="toast_samsung_only">삼성 기기에서만 지원됩니다.</string>
 
     <string name="notification_access_required_title">알림 접근 권한 필요</string>
@@ -49,20 +50,38 @@
 
     <string name="connected_status">연결됨</string>
     <string name="connected_to_mac">Mac에 연결됨</string>
+    <string name="reconnecting_status">재연결 중</string>
+    <string name="required_settings_title">필요한 설정</string>
+    <string name="required_settings_page_indicator">%1$d / %2$d</string>
+    <string name="required_settings_eyebrow">TANG 설정</string>
+    <string name="required_settings_fullscreen_title">필요한 설정을 마쳐주세요</string>
+    <string name="required_settings_fullscreen_subtitle">현재 기기에 아직 필요한 항목만 보여드려요.</string>
+    <string name="required_settings_step">%2$d단계 중 %1$d단계</string>
+    <string name="required_settings_swipe_guide">← 좌우로 넘겨 다음 카드 보기 →</string>
+    <string name="required_settings_later">나중에 설정하기</string>
+    <string name="status_notification_permission_title">릴레이 상태 알림</string>
+    <string name="status_notification_permission_description">Tang이 릴레이 연결을 유지 중임을 Android 알림에 표시하려면 허용하세요.</string>
+    <string name="reconnect">재연결</string>
     <string name="disconnect">연결 해제</string>
 
     <string name="qr_scan_subtitle">Mac에 연결하세요</string>
+    <string name="connection_methods_title">연결 방법을 선택하세요</string>
+    <string name="qr_method_title">QR 코드 스캔</string>
+    <string name="qr_method_description">Mac에서 Tang을 열고 화면에 표시된 QR 코드를 스캔하세요.</string>
+    <string name="start_qr_scan">QR 스캔 시작</string>
+    <string name="code_method_title">연결 코드 입력</string>
+    <string name="code_method_description">카메라 없이 Mac에 표시된 12자리 연결 코드로 연결할 수 있습니다.</string>
     <string name="qr_scanner_viewfinder_hint">바코드를 사각형 안에 맞춰 스캔하세요.</string>
     <string name="qr_scan_invalid">잘못된 QR 입니다.</string>
     <string name="qr_scan_not_connected">연결되지 않음</string>
-    <string name="qr_scan_instructions">macOS 앱의 QR을 스캔하거나 설정 코드를 입력하세요</string>
+    <string name="qr_scan_instructions">macOS 앱의 QR을 스캔하거나 연결 코드를 입력하세요</string>
     <string name="qr_scan_saved_waiting">%1$s의 페어 토큰이 저장되어 있으며 연결 대기 중입니다.</string>
     <string name="qr_scan_connected">연결됨</string>
     <string name="qr_scan_connected_details">%1$s에 연결되었습니다.</string>
     <string name="camera_permission_required">QR 스캔에 카메라 권한이 필요합니다.</string>
-    <string name="camera_permission_denied">카메라는 페어링 QR을 스캔할 때만 사용합니다. 다시 시도하거나 카메라 없이 설정 코드를 입력해 페어링할 수 있습니다.</string>
+    <string name="camera_permission_denied">카메라는 페어링 QR을 스캔할 때만 사용합니다. 다시 시도하거나 카메라 없이 연결 코드를 입력해 페어링할 수 있습니다.</string>
     <string name="permission_retry">다시 시도</string>
-    <string name="permission_exit">설정 코드 사용</string>
+    <string name="permission_exit">연결 코드 사용</string>
     <string name="phone_state_permission_required">전화 알림을 위해 전화 상태 권한이 필요합니다.</string>
     <string name="phone_state_permission_denied">전화 상태 권한이 거부되었습니다. 이 권한 없이는 수신 전화 알림을 표시할 수 없습니다. 계속하려면 권한을 허용하세요.</string>
 
