@@ -1,33 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/tang_bg"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:weightSum="5">
+    android:background="@color/tang_bg">
 
-    <com.google.android.material.card.MaterialCardView
-        style="@style/Widget.Tang.InsetPanel"
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="3"
-        app:cardCornerRadius="20dp">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
-        <com.journeyapps.barcodescanner.DecoratedBarcodeView
-            android:id="@+id/qrScannerView"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </com.google.android.material.card.MaterialCardView>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="2"
-        android:gravity="center_vertical"
-        android:orientation="vertical">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
 
         <TextView
             android:id="@+id/qrScanStatusText"
@@ -47,29 +34,106 @@
             android:text="@string/qr_scan_instructions"
             android:textAppearance="@style/TangCaptionText" />
 
-        <Button
-            android:id="@+id/manualPairButton"
-            style="@style/Widget.Tang.ButtonSecondary"
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/manual_pair_connect" />
+            android:layout_marginTop="24dp"
+            android:text="@string/connection_methods_title"
+            android:textAppearance="@style/TangStepTitle" />
 
-        <Button
-            android:id="@+id/qrNotificationAccessButton"
-            style="@style/Widget.Tang.ButtonSecondary"
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Tang.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/open_notification_access" />
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/qr_method_title"
+                    android:textAppearance="@style/TangStepTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/qr_method_description"
+                    android:textAppearance="@style/TangCaptionText" />
+
+                <com.google.android.material.card.MaterialCardView
+                    style="@style/Widget.Tang.InsetPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="260dp"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone"
+                    app:cardCornerRadius="16dp">
+
+                    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+                        android:id="@+id/qrScannerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <Button
+                    android:id="@+id/startQrScanButton"
+                    style="@style/Widget.Tang.ButtonPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/start_qr_scan" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Tang.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/code_method_title"
+                    android:textAppearance="@style/TangStepTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/code_method_description"
+                    android:textAppearance="@style/TangCaptionText" />
+
+                <Button
+                    android:id="@+id/manualPairButton"
+                    style="@style/Widget.Tang.ButtonPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/manual_pair_connect" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <Button
             android:id="@+id/qrPrivacyButton"
             style="@style/Widget.Tang.ButtonSecondary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="12dp"
             android:text="@string/privacy_policy" />
-    </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
 
-</LinearLayout>
+    <include layout="@layout/view_required_settings_overlay" />
+</FrameLayout>

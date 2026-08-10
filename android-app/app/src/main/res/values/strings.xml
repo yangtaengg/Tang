@@ -7,25 +7,25 @@
     <string name="open_samsung_notification_content_settings">Open Samsung Notification Content Settings</string>
     <string name="scan_qr">Pair via QR Scan</string>
     <string name="clear_pairing">Clear Pairing</string>
-    <string name="open_battery_settings">Battery Optimization Guidance</string>
+    <string name="open_battery_settings">Open battery settings</string>
     <string name="request_battery_exclusion">Allow Battery Optimization Exclusion</string>
-    <string name="request_sms_permission">Grant SMS Send Permission</string>
-    <string name="request_status_notifications">Allow relay status notifications</string>
-    <string name="manual_pair_code_hint">12-character code</string>
-    <string name="manual_pair_connect">Pair with setup code</string>
-    <string name="manual_pair_dialog_title">Connect with setup code</string>
-    <string name="manual_pair_screen_title">Enter setup code</string>
+    <string name="request_sms_permission">Allow SMS sending</string>
+    <string name="request_status_notifications">Allow notifications</string>
+    <string name="manual_pair_code_hint">12-character connection code</string>
+    <string name="manual_pair_connect">Enter connection code</string>
+    <string name="manual_pair_dialog_title">Connect with a connection code</string>
+    <string name="manual_pair_screen_title">Enter connection code</string>
     <string name="manual_pair_dialog_subtitle">The Mac will be auto-detected on current Wi-Fi.</string>
     <string name="manual_pair_host_label">Mac address</string>
     <string name="manual_pair_host_hint">e.g. 192.168.0.12 or ws://192.168.0.12:8765/ws</string>
     <string name="manual_pair_host_required">Could not find Mac on current Wi-Fi. Enter Mac IP/host manually.</string>
-    <string name="manual_pair_code_label">12-character setup code</string>
+    <string name="manual_pair_code_label">12-character connection code</string>
     <string name="manual_pair_cancel">Cancel</string>
     <string name="manual_pair_back">Back</string>
     <string name="manual_pair_confirm">Connect</string>
     <string name="manual_pair_finding_mac">Connecting Mac…</string>
-    <string name="manual_pair_invalid_code">Enter the complete 12-character code.</string>
-    <string name="manual_pair_auth_failed">Setup code verification failed. Refresh the pairing screen on Mac and try again.</string>
+    <string name="manual_pair_invalid_code">Enter the complete 12-character connection code.</string>
+    <string name="manual_pair_auth_failed">Connection code verification failed. Refresh the pairing screen on Mac and try again.</string>
 
     <string name="toast_incoming_call_enabled">Incoming call alerts enabled.</string>
     <string name="toast_sms_permission_granted">SMS sending permission granted.</string>
@@ -34,6 +34,7 @@
     <string name="toast_status_notifications_denied">Relay can run, but its status may not appear in the notification drawer.</string>
     <string name="toast_paired_with_device">Paired with %1$s</string>
     <string name="toast_pairing_cleared">Pairing cleared</string>
+    <string name="toast_reconnecting">Reconnecting to Mac…</string>
     <string name="toast_samsung_only">Samsung device only</string>
 
     <string name="notification_access_required_title">Notification access required</string>
@@ -69,20 +70,38 @@
 
     <string name="connected_status">Connected</string>
     <string name="connected_to_mac">Connected to Mac</string>
+    <string name="reconnecting_status">Reconnecting</string>
+    <string name="required_settings_title">Required settings</string>
+    <string name="required_settings_page_indicator">%1$d / %2$d</string>
+    <string name="required_settings_eyebrow">TANG SETUP</string>
+    <string name="required_settings_fullscreen_title">Finish your setup</string>
+    <string name="required_settings_fullscreen_subtitle">Only the settings this device still needs are shown.</string>
+    <string name="required_settings_step">STEP %1$d OF %2$d</string>
+    <string name="required_settings_swipe_guide">← Swipe to see the next card →</string>
+    <string name="required_settings_later">Set up later</string>
+    <string name="status_notification_permission_title">Relay status notifications</string>
+    <string name="status_notification_permission_description">Allow notifications so Android can show that Tang is keeping the relay connection active.</string>
+    <string name="reconnect">Reconnect</string>
     <string name="disconnect">Disconnect</string>
 
     <string name="qr_scan_subtitle">Connect to your Mac</string>
+    <string name="connection_methods_title">Choose how to connect</string>
+    <string name="qr_method_title">Scan QR code</string>
+    <string name="qr_method_description">Open Tang on your Mac and scan the QR code shown there.</string>
+    <string name="start_qr_scan">Start QR scan</string>
+    <string name="code_method_title">Enter connection code</string>
+    <string name="code_method_description">Connect without the camera using the 12-character code shown on your Mac.</string>
     <string name="qr_scanner_viewfinder_hint">Place a barcode inside the viewfinder rectangle to scan it.</string>
     <string name="qr_scan_invalid">Invalid QR code.</string>
     <string name="qr_scan_not_connected">Not connected</string>
-    <string name="qr_scan_instructions">Scan the QR code or enter the setup code from the macOS app</string>
+    <string name="qr_scan_instructions">Scan the QR code or enter the connection code from the macOS app</string>
     <string name="qr_scan_saved_waiting">Pair token for %s is saved, waiting for connection</string>
     <string name="qr_scan_connected">Connected</string>
     <string name="qr_scan_connected_details">You are connected to %s</string>
     <string name="camera_permission_required">Camera permission required for QR scanning</string>
-    <string name="camera_permission_denied">Camera access is used only to scan a pairing QR. You can retry or pair without camera access by entering the setup code.</string>
+    <string name="camera_permission_denied">Camera access is used only to scan a pairing QR. You can retry or pair without camera access by entering the connection code.</string>
     <string name="permission_retry">Retry</string>
-    <string name="permission_exit">Use setup code</string>
+    <string name="permission_exit">Use connection code</string>
     <string name="phone_state_permission_required">Phone state permission is required for call alerts</string>
     <string name="phone_state_permission_denied">Phone state permission was denied. This app cannot show incoming call alerts without this permission. Please grant the permission to continue.</string>
 
